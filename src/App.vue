@@ -25,38 +25,61 @@ const checkRecoveryFromUrl = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   // 最先執行，不等任何 async
   checkRecoveryFromUrl()
 
   // 檢查是否帶有 lineId 準備綁定
   const handleLineBinding = async (userId) => {
-    const query = new URLSearchParams(window.location.search)
-    const lineId = query.get('lineId')
-    if (lineId && userId) {
-      // 將 Supabase ID 和 LINE ID 綁定存入 user_profiles 表格
-      const { error } = await supabase
-        .from('user_profiles')
-        .upsert({ id: userId, line_id: lineId }, { onConflict: 'id' })
-      
-      if (!error) {
-        alert('🎉 LINE 機器人帳號綁定成功！現在請回 LINE 傳送連結吧！')
-        // 清除網址列上的 lineId，避免重整時重複顯示，處理 GitHub Pages 的特殊路徑
-        const newPath = window.location.pathname.endsWith('/') 
-          ? window.location.pathname 
-          : window.location.pathname + '/';
-        window.history.replaceState({}, document.title, newPath);
-      } else {
-        console.error('LINE 綁定失敗:', error)
+    try {
+      const query = new URLSearchParams(window.location.search)
+      const lineId = query.get('lineId')
+      if (lineId && userId) {
+        // 將 Supabase ID 和 LINE ID 綁定存入 user_profiles 表格
+        const { error } = await supabase
+          .from('user_profiles')
+          .upsert({ id: userId, line_id: lineId }, { onConflict: 'id' })
+        
+        if (!error) {
+          alert('🎉 LINE 機器人帳號綁定成功！現在請回 LINE 傳送連結吧！')
+          
+          // 使用 URLSearchParams 優雅地清理網址列，避免 GitHub Pages 的 404
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.delete('lineId');
+          // 清理後的網址若只剩 '?'，就把 '?' 也去掉
+          const cleanUrl = newUrl.href.endsWith('?') ? newUrl.href.slice(0, -1) : newUrl.href;
+          window.history.replaceState({}, document.title, cleanUrl);
+        } else {
+          console.error('LINE 綁定失敗:', error)
+          // 假如是刪除後的無效憑證，進行安全登出
+          if (error.code === '401' || error.message?.includes('JWT')) {
+            await supabase.auth.signOut()
+          }
+        }
       }
+    } catch (e) {
+      console.error('Line Binding API 例外錯誤:', e)
     }
   }
 
-  supabase.auth.getSession().then(async ({ data: { session } }) => {
-    user.value = session?.user || null
-    if (user.value) await handleLineBinding(user.value.id)
+  // 確保無論發生什麼事（如 LINE 瀏覽器禁止 Cookie/localStorage、無效金鑰），都能結束 Loading
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession()
+    if (error) {
+      await supabase.auth.signOut()
+      user.value = null
+    } else {
+      user.value = session?.user || null
+    }
+
+    if (user.value) {
+      await handleLineBinding(user.value.id)
+    }
+  } catch (err) {
+    console.error('Auth 初始化錯誤:', err)
+  } finally {
     isLoading.value = false
-  })
+  }
 
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'PASSWORD_RECOVERY') {
