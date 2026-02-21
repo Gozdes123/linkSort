@@ -3,32 +3,69 @@ import { ref } from 'vue'
 import { supabase } from '../lib/supabase'
 
 const email = ref('')
+const password = ref('')
 const loading = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
+const error = ref('')
+const success = ref('')
+const mode = ref('login') // 'login' | 'register' | 'forgot'
 
-const handleLogin = async () => {
+const switchMode = (m) => {
+  mode.value = m
+  error.value = ''
+  success.value = ''
+}
+
+const translateError = (msg = '') => {
+  if (msg.includes('Invalid login credentials')) return '帳號或密碼錯誤，請再試一次'
+  if (msg.includes('User already registered')) return '此 Email 已經註冊，請直接登入'
+  if (msg.includes('Password should be at least')) return '密碼長度至少需要 6 個字元'
+  if (msg.includes('rate limit') || msg.includes('email rate limit'))
+    return '寄信次數已達上限（每小時 2 封），請稍後再試'
+  if (msg.includes('Unable to validate email')) return 'Email 格式不正確'
+  if (msg.includes('Email not confirmed')) return '帳號尚未驗證，請先去信箱點擊驗證連結'
+  return msg
+}
+
+const handleSubmit = async () => {
   if (!email.value) return
+  if (mode.value !== 'forgot' && !password.value) return
   loading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
+  error.value = ''
+  success.value = ''
 
-  // 核心修正：動態組合當前網址 (包含 https://domain.com/repo-name/)
-  // 這樣在本地開發會是 localhost，部署後會是 github.io/linkSort/
-  const redirectUrl = window.location.origin + window.location.pathname
+  if (mode.value === 'login') {
+    const { error: e } = await supabase.auth.signInWithPassword({
+      email: email.value,
+      password: password.value,
+    })
+    if (e) error.value = translateError(e.message)
+    // 成功時 App.vue 的 onAuthStateChange 自動跳轉
 
-  const { error } = await supabase.auth.signInWithOtp({
-    email: email.value,
-    options: {
-      // 傳送正確的跳轉地址給 Supabase
-      emailRedirectTo: redirectUrl
+  } else if (mode.value === 'register') {
+    const { data, error: e } = await supabase.auth.signUp({
+      email: email.value,
+      password: password.value,
+    })
+    if (e) {
+      error.value = translateError(e.message)
+    } else if (data?.user?.identities?.length === 0) {
+      error.value = '此 Email 已經註冊，請直接登入'
+    } else if (data?.session) {
+      success.value = '帳號建立成功！正在登入...'
+    } else {
+      success.value = `驗證信已發送到 ${email.value}，點擊信中連結完成驗證後再回來登入`
     }
-  })
 
-  if (error) {
-    errorMessage.value = error.message
-  } else {
-    successMessage.value = '登入連結已發送！請去您的信箱收信，並點擊信中的連結即可登入。'
+  } else if (mode.value === 'forgot') {
+    const redirectUrl = window.location.origin + window.location.pathname
+    const { error: e } = await supabase.auth.resetPasswordForEmail(email.value, {
+      redirectTo: redirectUrl,
+    })
+    if (e) {
+      error.value = translateError(e.message)
+    } else {
+      success.value = `密碼重設信已寄到 ${email.value}，請收信後點擊連結設定新密碼`
+    }
   }
 
   loading.value = false
@@ -36,182 +73,271 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="login-container">
-    <div class="glass-panel login-card animate-fade-in">
+  <div class="login-page">
+    <div class="login-card glass-panel">
+
+      <!-- Logo -->
       <div class="brand">
-        <div class="logo-circle">
-          <span class="logo-icon">🔗</span>
-        </div>
+        <div class="logo-wrap">🔗</div>
         <h1>LinkSort</h1>
-        <p>你的智慧社群連結管家</p>
+        <p>你的個人連結收藏庫</p>
       </div>
 
-      <form @submit.prevent="handleLogin" class="login-form">
-        <div class="input-group">
-          <label>電子信箱 Email (無密碼登入)</label>
-          <input type="email" v-model="email" placeholder="friend@example.com" required
-            :disabled="successMessage !== ''" />
+      <!-- Tab 切換 -->
+      <div class="tabs">
+        <button :class="{ active: mode === 'login' }" @click="switchMode('login')">登入</button>
+        <button :class="{ active: mode === 'register' }" @click="switchMode('register')">註冊</button>
+        <button :class="{ active: mode === 'forgot' }" @click="switchMode('forgot')">忘記密碼</button>
+      </div>
+
+      <!-- Form -->
+      <form @submit.prevent="handleSubmit" class="form">
+
+        <div class="field">
+          <label>{{ mode === 'forgot' ? '請輸入你的 Email' : 'Email' }}</label>
+          <input type="email" v-model="email" placeholder="your@email.com" required autocomplete="email" />
         </div>
 
-        <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
-        <div v-if="successMessage" class="success-box">
-          <span class="icon">📬</span>
-          <p>{{ successMessage }}</p>
+        <div class="field" v-if="mode !== 'forgot'">
+          <label>密碼</label>
+          <input type="password" v-model="password" placeholder="至少 6 個字元" required minlength="6"
+            autocomplete="current-password" />
         </div>
 
-        <button v-if="!successMessage" type="submit" class="login-btn" :class="{ loading }">
-          <span v-if="!loading">發送專屬登入連結</span>
-          <span v-else class="loader"></span>
+        <!-- 錯誤訊息 -->
+        <div v-if="error" class="msg error">⚠️ {{ error }}</div>
+        <!-- 成功訊息 -->
+        <div v-if="success" class="msg success">✅ {{ success }}</div>
+
+        <button type="submit" class="submit" :disabled="loading">
+          <span v-if="loading" class="spinner"></span>
+          <span v-else>
+            {{ mode === 'login' ? '登入' : mode === 'register' ? '建立帳號' : '發送重設密碼信' }}
+          </span>
         </button>
+
       </form>
 
-      <div class="footer-note" v-if="!successMessage">
-        <p>我們採用更安全、無需記憶密碼的 Magic Link 登入方式。</p>
-      </div>
+      <!-- 底部提示 -->
+      <p class="hint" v-if="mode === 'login'">
+        還沒有帳號？<button class="link" @click="switchMode('register')">立即註冊</button>
+      </p>
+      <p class="hint" v-else-if="mode === 'register'">
+        已有帳號？<button class="link" @click="switchMode('login')">回到登入</button>
+      </p>
+      <p class="hint" v-else>
+        想起密碼了？<button class="link" @click="switchMode('login')">回到登入</button>
+      </p>
+
     </div>
   </div>
 </template>
 
 <style scoped>
-.login-container {
-  width: 100vw;
-  height: 100vh;
+.login-page {
+  width: 100%;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1.5rem;
+  box-sizing: border-box;
 }
 
 .login-card {
   width: 100%;
-  max-width: 400px;
-  padding: 2.5rem;
+  max-width: 420px;
+  padding: 2.25rem 2rem;
+  border-radius: 24px;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
+/* ---- Brand ---- */
 .brand {
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
-.logo-circle {
-  width: 64px;
-  height: 64px;
-  background: linear-gradient(135deg, var(--accent-glow), var(--accent-hover));
-  border-radius: 50%;
-  display: flex;
+.logo-wrap {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 1rem;
-  font-size: 1.5rem;
-  box-shadow: 0 4px 15px var(--accent-glow);
+  width: 62px;
+  height: 62px;
+  font-size: 1.75rem;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--accent-glow), var(--accent-hover));
+  margin-bottom: 0.9rem;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
 }
 
 .brand h1 {
-  font-size: 1.75rem;
-  letter-spacing: -0.5px;
-  margin-bottom: 0.25rem;
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin: 0 0 0.3rem;
 }
 
 .brand p {
   font-size: 0.9rem;
-  opacity: 0.8;
+  color: var(--text-secondary);
+  margin: 0;
 }
 
-.login-form {
+/* ---- Tabs ---- */
+.tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.tabs button {
+  flex: 1;
+  padding: 0.5rem 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.tabs button.active {
+  background: var(--accent-color);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
+}
+
+/* ---- Form ---- */
+.form {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
-.input-group {
+.field {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
-.input-group label {
-  font-size: 0.85rem;
+.field label {
+  font-size: 0.82rem;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
-/* 如果發送成功，把輸入框稍微變暗 */
-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.field input {
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+  min-height: 48px;
 }
 
-.login-btn {
-  background: var(--accent-color);
-  color: white;
-  font-weight: 600;
-  padding: 0.85rem;
+.field input:focus {
+  border-color: var(--accent-color);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Messages ---- */
+.msg {
+  font-size: 0.875rem;
   border-radius: 8px;
-  margin-top: 1rem;
-  position: relative;
-  overflow: hidden;
-}
-
-.login-btn:hover:not(.loading) {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--accent-glow);
-}
-
-.login-btn:active:not(.loading) {
-  transform: translateY(1px);
-  box-shadow: none;
-}
-
-.error-msg {
-  color: #ff6b6b;
-  font-size: 0.85rem;
-  text-align: center;
-  margin-top: -0.5rem;
-}
-
-.success-box {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  border-radius: 8px;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  text-align: center;
-}
-
-.success-box .icon {
-  font-size: 2rem;
-}
-
-.success-box p {
-  color: #10b981;
-  font-weight: 500;
-  font-size: 0.95rem;
+  padding: 0.65rem 0.9rem;
   line-height: 1.5;
 }
 
-.footer-note {
-  text-align: center;
-  font-size: 0.8rem;
-  margin-top: 1rem;
-  color: var(--text-secondary);
+.msg.error {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
-.loader {
-  display: inline-block;
+.msg.success {
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* ---- Submit ---- */
+.submit {
+  padding: 0.85rem;
+  background: var(--accent-color);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+.submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---- Hint ---- */
+.hint {
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--accent-color);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: inherit;
+}
+
+.link:hover {
+  color: var(--accent-hover);
+}
+
+/* ---- Spinner ---- */
+.spinner {
   width: 20px;
   height: 20px;
   border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
   border-radius: 50%;
-  border-top-color: white;
-  animation: spin 0.8s ease-in-out infinite;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
 }
 
 @keyframes spin {
