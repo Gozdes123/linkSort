@@ -472,15 +472,6 @@ const selectCollection = (col) => {
             <input type="url" v-model="newUrl" placeholder="貼上連結按 Enter 儲存..." @keyup.enter="addLink" />
             <button class="add-btn" @click="addLink">儲存</button>
           </div>
-
-          <!-- 批次管理：純 icon 按鈕，固定 40px 寬度，永遠不超出畫面 -->
-          <button class="batch-icon-btn" @click="toggleBatchMode" title="批次管理">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 11 12 14 22 4"></polyline>
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-            </svg>
-          </button>
         </template>
 
         <!-- ===== 批次模式：header 直接變成批次操作列 ===== -->
@@ -537,6 +528,15 @@ const selectCollection = (col) => {
         </div>
       </div>
     </main>
+    <button class="floating-batch-btn" :class="{ 'active-mode': isBatchMode }" @click="toggleBatchMode"
+      :title="isBatchMode ? '取消管理' : '批次管理'">
+      <svg v-if="!isBatchMode" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 11 12 14 22 4"></polyline>
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+      </svg>
+      <span v-else class="cancel-text">取消</span>
+    </button>
   </div>
 </template>
 
@@ -1174,6 +1174,37 @@ const selectCollection = (col) => {
   cursor: not-allowed;
 }
 
+
+.floating-batch-btn {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background: var(--accent-color, #4f46e5);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 500;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.floating-batch-btn.active-mode {
+  background: #ef4444;
+  /* 進入管理模式變紅色 */
+  width: 90px;
+  border-radius: 16px;
+}
+
+.cancel-text {
+  font-weight: bold;
+}
+
 /* ============================================
    手機版 RWD (768px 以下)
    ============================================ */
@@ -1323,6 +1354,13 @@ const selectCollection = (col) => {
 
   .section-title {
     font-size: 1rem;
+  }
+
+  .floating-batch-btn {
+    right: 16px;
+    bottom: 20px;
+    width: 52px;
+    height: 52px;
   }
 }
 
