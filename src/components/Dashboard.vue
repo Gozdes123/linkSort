@@ -122,12 +122,29 @@ onMounted(async () => {
 
 // 雙重新篩選邏輯：同時比對平台來源和自訂子分類
 const filteredLinks = computed(() => {
-  return links.value.filter(link => {
-    const matchPlatform = activePlatform.value === '全部來源' || link.category === activePlatform.value || (activePlatform.value === '其他來源' && !['Threads', 'Dcard', 'YouTube', 'X'].includes(link.category))
-    const matchCollection = activeCollection.value === '全部收藏' || link.custom_category === activeCollection.value
-    return matchPlatform && matchCollection
-  })
-})
+  let result = links.value;
+
+  // 1. 處理母分類 (平台) 過濾
+  if (activePlatform.value !== '全部來源') {
+    if (activePlatform.value === '其他來源') {
+      // 定義所有「非其他」的平台名單
+      const knownPlatforms = ['Threads', 'Instagram', 'Dcard', 'YouTube', 'X'];
+      // 只有「不在」名單內的，才顯示在「其他來源」
+      result = result.filter(link => !knownPlatforms.includes(link.category));
+    } else {
+      // 精準匹配 (例如只抓 Instagram)
+      result = result.filter(link => link.category === activePlatform.value);
+    }
+  }
+
+  // 2. 處理子分類 (收藏) 過濾
+  if (activeCollection.value !== '全部收藏') {
+    result = result.filter(link => link.custom_category === activeCollection.value);
+  }
+
+  // 3. 排序 (最新的在前)
+  return result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+});
 
 const getBadgeColor = (platform) => {
   const colors = {
