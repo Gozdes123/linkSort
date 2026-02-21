@@ -29,12 +29,36 @@ onMounted(() => {
   // 最先執行，不等任何 async
   checkRecoveryFromUrl()
 
-  supabase.auth.getSession().then(({ data: { session } }) => {
+  // 檢查是否帶有 lineId 準備綁定
+  const handleLineBinding = async (userId) => {
+    const query = new URLSearchParams(window.location.search)
+    const lineId = query.get('lineId')
+    if (lineId && userId) {
+      // 將 Supabase ID 和 LINE ID 綁定存入 user_profiles 表格
+      const { error } = await supabase
+        .from('user_profiles')
+        .upsert({ id: userId, line_id: lineId }, { onConflict: 'id' })
+      
+      if (!error) {
+        alert('🎉 LINE 機器人帳號綁定成功！現在請回 LINE 傳送連結吧！')
+        // 清除網址列上的 lineId，避免重整時重複顯示，處理 GitHub Pages 的特殊路徑
+        const newPath = window.location.pathname.endsWith('/') 
+          ? window.location.pathname 
+          : window.location.pathname + '/';
+        window.history.replaceState({}, document.title, newPath);
+      } else {
+        console.error('LINE 綁定失敗:', error)
+      }
+    }
+  }
+
+  supabase.auth.getSession().then(async ({ data: { session } }) => {
     user.value = session?.user || null
+    if (user.value) await handleLineBinding(user.value.id)
     isLoading.value = false
   })
 
-  supabase.auth.onAuthStateChange((event, session) => {
+  supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'PASSWORD_RECOVERY') {
       isResettingPassword.value = true
       user.value = session?.user || null
@@ -44,6 +68,7 @@ onMounted(() => {
       user.value = session?.user || null
     } else {
       user.value = session?.user || null
+      if (user.value) await handleLineBinding(user.value.id)
     }
   })
 })
