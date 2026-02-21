@@ -84,17 +84,28 @@ const fetchLinks = async () => {
   isLoadingInitial.value = false
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadCustomCategories()
-  fetchLinks()
+  await fetchLinks()
+
   const urlParams = new URLSearchParams(window.location.search);
-  const sharedUrl = urlParams.get('url'); // 取得捷徑傳過來的網址參數
+  const sharedUrl = urlParams.get('url');
 
   if (sharedUrl) {
-    newUrl.value = sharedUrl;
-    addLink(); // 自動執行你寫好的分類與儲存函式
-    // 執行完後，建議清空 URL 參數，避免重新整理頁面時重複觸發
-    window.history.replaceState({}, document.title, window.location.pathname);
+    // 1. 先解碼網址
+    const decodedUrl = decodeURIComponent(sharedUrl);
+
+    // 2. 賦值給輸入框
+    newUrl.value = decodedUrl;
+
+    // 3. 稍微延遲一下下，確保 Vue 已經更新了 DOM 和變數，再執行 addLink
+    setTimeout(async () => {
+      console.log('捷徑自動偵測到網址，準備儲存:', newUrl.value);
+      await addLink();
+
+      // 4. 存完後再清空網址列
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }, 500);
   }
 })
 
