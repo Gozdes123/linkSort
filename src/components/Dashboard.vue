@@ -456,10 +456,10 @@ const selectCollection = (col) => {
             <button class="add-btn" @click="addLink">儲存</button>
           </div>
 
-          <button class="batch-mode-btn" @click="toggleBatchMode" title="批次管理">
-            <span class="batch-label-desktop">批次管理</span>
-            <svg class="batch-icon-mobile" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- 批次管理：純 icon 按鈕，固定 40px 寬度，永遠不超出畫面 -->
+          <button class="batch-icon-btn" @click="toggleBatchMode" title="批次管理">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="9 11 12 14 22 4"></polyline>
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
             </svg>
@@ -732,6 +732,9 @@ const selectCollection = (col) => {
 
 .sidebar-footer {
   margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .logout-btn {
@@ -773,17 +776,42 @@ const selectCollection = (col) => {
 /* 漢堡按鈕：桌面隱藏、手機顯示 */
 .hamburger-btn {
   display: none;
-  background: rgba(255, 255, 255, 0.08);
+  /* PC 上隱藏 */
+  background: rgba(255, 255, 255, 0.07);
   border: 1px solid var(--panel-border);
   color: var(--text-primary);
   border-radius: 8px;
-  width: 42px;
-  height: 42px;
+  padding: 0.6rem;
+  min-width: 42px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  cursor: pointer;
-  transition: background 0.2s;
+}
+
+/* 批次管理 icon 按鈕：純 icon，固定 40×44px，永遠不超出畫面 */
+.batch-icon-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--panel-border);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  width: 40px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.batch-icon-btn:hover {
+  color: var(--accent-color);
+  background: rgba(99, 102, 241, 0.12);
+  border-color: var(--accent-color);
+}
+
+.batch-icon-btn:active {
+  transform: scale(0.94);
 }
 
 .hamburger-btn:hover {
