@@ -11,7 +11,7 @@ const props = defineProps({
 })
 
 // 母分類 (固定的社群平台)
-const platforms = ['全部來源', 'Threads', 'Dcard', 'YouTube', 'X', '其他來源']
+const platforms = ['全部來源', 'Threads', 'Instagram', 'Dcard', 'YouTube', 'X', '其他來源']
 const activePlatform = ref('全部來源')
 
 // 子分類 (自訂我的收藏)
@@ -132,6 +132,7 @@ const filteredLinks = computed(() => {
 const getBadgeColor = (platform) => {
   const colors = {
     Threads: 'var(--color-threads)',
+    Instagram: 'var(--color-instagram)',
     Dcard: 'var(--color-dcard)',
     YouTube: 'var(--color-youtube)',
     X: 'var(--color-x)',
@@ -143,6 +144,7 @@ const parseCategory = (url) => {
   try {
     const domain = new URL(url).hostname.toLowerCase()
     if (domain.includes('threads.net') || domain.includes('threads.com')) return 'Threads'
+    if (domain.includes('instagram.com')) return 'Instagram'
     if (domain.includes('dcard.tw') || domain.includes('dcard.cc')) return 'Dcard'
     if (domain.includes('youtube.com') || domain.includes('youtu.be')) return 'YouTube'
     if (domain.includes('twitter.com') || domain.includes('x.com')) return 'X'
@@ -437,34 +439,61 @@ const selectCollection = (col) => {
     <!-- Main Content -->
     <main class="main-content">
       <header class="main-header glass-panel">
-        <!-- 手機漢堡選單按鈕 -->
-        <button class="hamburger-btn" @click="openSidebar" title="開啟選單">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
-          </svg>
-        </button>
 
-        <div class="add-link-form">
-          <input type="url" v-model="newUrl" placeholder="貼上連結按 Enter 儲存..." @keyup.enter="addLink"
-            :disabled="isBatchMode" />
-          <button class="add-btn" @click="addLink" :disabled="isBatchMode">儲存</button>
-        </div>
+        <!-- ===== 一般模式 ===== -->
+        <template v-if="!isBatchMode">
+          <button class="hamburger-btn" @click="openSidebar" title="開啟選單">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
 
-        <div class="header-actions">
-          <button class="batch-mode-btn" :class="{ 'active': isBatchMode }" @click="toggleBatchMode"
-            :title="isBatchMode ? '取消選取' : '批次管理'">
-            <span class="batch-label-desktop" v-if="!isBatchMode">批次管理</span>
-            <span class="batch-label-desktop" v-else>取消選取</span>
+          <div class="add-link-form">
+            <input type="url" v-model="newUrl" placeholder="貼上連結按 Enter 儲存..." @keyup.enter="addLink" />
+            <button class="add-btn" @click="addLink">儲存</button>
+          </div>
+
+          <button class="batch-mode-btn" @click="toggleBatchMode" title="批次管理">
+            <span class="batch-label-desktop">批次管理</span>
             <svg class="batch-icon-mobile" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="9 11 12 14 22 4"></polyline>
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
             </svg>
           </button>
-        </div>
+        </template>
+
+        <!-- ===== 批次模式：header 直接變成批次操作列 ===== -->
+        <template v-else>
+          <!-- 左側：已選筆數 + 取消按鈕 -->
+          <div class="batch-left">
+            <button class="cancel-batch-btn" @click="toggleBatchMode" title="取消">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <span class="batch-count">
+              已選 <strong>{{ selectedLinks.size }}</strong> 項
+            </span>
+          </div>
+
+          <!-- 右側：分類選擇 + 確認按鈕 -->
+          <div class="batch-right">
+            <select v-model="batchTargetCategory" class="batch-select-inline">
+              <option value="未分類">取消標籤</option>
+              <option v-for="cat in customCategories" :key="cat" :value="cat">{{ cat }}</option>
+            </select>
+            <button class="confirm-batch-btn" @click="applyBatchCategory" :disabled="selectedLinks.size === 0">
+              移動
+            </button>
+          </div>
+        </template>
+
       </header>
 
       <div class="links-container">
@@ -472,10 +501,7 @@ const selectCollection = (col) => {
           <span class="title-platform">{{ activePlatform }}</span>
           <span class="title-separator" v-if="activeCollection !== '全部收藏'">/</span>
           <span class="title-collection" v-if="activeCollection !== '全部收藏'">{{ activeCollection }}</span>
-
-          <span v-if="isBatchMode" class="batch-title-hint">
-            (點擊卡片即可選取)
-          </span>
+          <span v-if="isBatchMode" class="batch-title-hint">(點擊卡片選取)</span>
         </h2>
 
         <div v-if="isLoadingInitial" class="loading-state">
@@ -491,25 +517,6 @@ const selectCollection = (col) => {
             <span class="icon">📂</span>
             <p>這個篩選條件下沒有任何連結喔！</p>
           </div>
-        </div>
-      </div>
-
-      <!-- 批次管理控制工具列 -->
-      <div v-if="isBatchMode" class="batch-action-bar glass-panel animate-slide-up">
-        <div class="batch-info">
-          已選擇 <strong>{{ selectedLinks.size }}</strong> 個項目
-        </div>
-        <div class="batch-controls">
-          <label>加入標籤：</label>
-          <select v-model="batchTargetCategory" class="batch-select">
-            <option value="未分類">取消標籤 (未分類)</option>
-            <option v-for="cat in customCategories" :key="cat" :value="cat">
-              {{ cat }}
-            </option>
-          </select>
-          <button class="confirm-batch-btn" @click="applyBatchCategory" :disabled="selectedLinks.size === 0">
-            確認移動
-          </button>
         </div>
       </div>
     </main>
@@ -863,6 +870,81 @@ const selectCollection = (col) => {
   background: rgba(244, 63, 94, 0.1);
   color: #f43f5e;
   border-color: rgba(244, 63, 94, 0.3);
+}
+
+/* ─── 批次模式 header 元件 ─── */
+
+.batch-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.cancel-batch-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.cancel-batch-btn:hover,
+.cancel-batch-btn:active {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+.batch-count {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.batch-count strong {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.batch-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.batch-select-inline {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--panel-border);
+  color: white;
+  padding: 0 0.6rem;
+  border-radius: 8px;
+  outline: none;
+  font-family: inherit;
+  font-size: 0.9rem;
+  height: 38px;
+  flex: 1;
+  min-width: 0;
+  max-width: 200px;
+  cursor: pointer;
+}
+
+.batch-select-inline:focus {
+  border-color: var(--accent-color);
+}
+
+.batch-select-inline option {
+  background: var(--bg-gradient-end);
+  color: white;
 }
 
 /* === 連結列表 === */

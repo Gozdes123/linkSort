@@ -11,6 +11,7 @@ const emit = defineEmits(['delete', 'toggleSelect', 'edit'])
 
 const siteColors = {
   Threads: '#000000',
+  Instagram: '#e1306c',
   Dcard: '#006aa6',
   YouTube: '#ff0000',
   X: '#1da1f2',
@@ -36,26 +37,21 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
 </script>
 
 <template>
-  <div 
-    class="link-card glass-panel animate-fade-in" 
-    :class="{ 'is-selectable': selectable, 'is-selected': selected }"
-    @click="selectable && emit('toggleSelect', link.id)"
-  >
+  <div class="link-card glass-panel animate-fade-in" :class="{ 'is-selectable': selectable, 'is-selected': selected }"
+    @click="selectable && emit('toggleSelect', link.id)">
     <!-- 選取時的明顯勾選標記 -->
     <div v-if="selectable && selected" class="selected-overlay">
       <div class="checkmark-circle">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
       </div>
     </div>
 
     <div class="thumbnail-wrapper" v-if="link.thumbnail_url">
-      <img 
-        :src="link.thumbnail_url" 
-        :alt="link.title"
-        class="thumbnail"
-        loading="lazy"
-        @error="$event.target.style.display='none'"
-      />
+      <img :src="link.thumbnail_url" :alt="link.title" class="thumbnail" loading="lazy"
+        @error="$event.target.style.display = 'none'" />
     </div>
 
     <div class="card-content">
@@ -65,10 +61,7 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
           <span class="category-badge platform-badge" :style="{ background: badgeColor }">
             {{ link.category }}
           </span>
-          <span 
-            class="category-badge custom-badge" 
-            v-if="link.custom_category && link.custom_category !== '未分類'"
-          >
+          <span class="category-badge custom-badge" v-if="link.custom_category && link.custom_category !== '未分類'">
             📁 {{ link.custom_category }}
           </span>
         </div>
@@ -81,18 +74,33 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
           <span v-else>{{ link.title }}</span>
         </h3>
         <p class="description" v-if="link.description && !isLoadingTitle">{{ link.description }}</p>
-        <a :href="link.url" target="_blank" class="url" @click="selectable && $event.preventDefault()">{{ link.url }}</a>
+        <a :href="link.url" target="_blank" class="url" @click="selectable && $event.preventDefault()">{{ link.url
+          }}</a>
       </div>
 
       <div class="card-footer">
         <button class="action-btn edit-btn" title="編輯標題" @click.stop="emit('edit', link.id, link.title)">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
         </button>
         <button class="action-btn copy-btn" title="複製連結" @click.stop="copyLink">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
         </button>
         <button class="action-btn delete-btn" title="刪除" @click.stop="emit('delete', link.id)">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
         </button>
       </div>
     </div>
@@ -129,7 +137,8 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
 
 .is-selectable {
   cursor: pointer;
-  user-select: none; /* 防止長按選到文字 */
+  user-select: none;
+  /* 防止長按選到文字 */
 }
 
 .is-selectable:hover {
@@ -141,7 +150,8 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
   border-color: var(--accent-color);
   box-shadow: 0 0 0 2px var(--accent-glow), 0 8px 30px rgba(99, 102, 241, 0.25);
   background: rgba(99, 102, 241, 0.12);
-  transform: scale(0.98); /* 輕微縮小，有按下去的感覺 */
+  transform: scale(0.98);
+  /* 輕微縮小，有按下去的感覺 */
 }
 
 /* 勾選標記覆蓋層 */
@@ -172,8 +182,15 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
 }
 
 @keyframes pop-in {
-  from { transform: scale(0); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* 縮圖區域 */
@@ -183,7 +200,7 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
-  background: rgba(0,0,0,0.2);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .thumbnail {
@@ -209,8 +226,8 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
   color: #fff;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   z-index: 5;
 }
 
@@ -254,7 +271,7 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
   color: #fff;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .custom-badge {
@@ -318,9 +335,17 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
 
 /* 載入中的閃爍動畫 */
 @keyframes shimmer {
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
+  0% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.6;
+  }
 }
 
 .loading-shimmer {
@@ -340,7 +365,7 @@ const isLoadingTitle = computed(() => props.link.title === '抓取標題中...')
 }
 
 .action-btn {
-  background: rgba(255,255,255, 0.05);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 6px;
   width: 32px;
   height: 32px;
