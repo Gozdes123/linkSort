@@ -42,18 +42,22 @@ const handleSubmit = async () => {
     // 成功時 App.vue 的 onAuthStateChange 自動跳轉
 
   } else if (mode.value === 'register') {
+    const redirectUrl = window.location.origin + window.location.pathname
     const { data, error: e } = await supabase.auth.signUp({
       email: email.value,
       password: password.value,
+      options: {
+        emailRedirectTo: redirectUrl
+      }
     })
-    
+
     if (e) {
       error.value = translateError(e.message)
     } else if (data?.user?.identities?.length === 0) {
       error.value = '此 Email 已經註冊，請直接登入'
     } else {
       success.value = `驗證信已發送到 ${email.value}，點擊信中連結完成驗證後再回來登入`
-      
+
       // 確保註冊後即使 Supabase 產生了無效的快取 Session，也強制登出，避免使用者誤以為自己已經登入
       if (data?.session) {
         await supabase.auth.signOut()
