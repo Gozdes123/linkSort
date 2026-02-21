@@ -27,6 +27,17 @@ const isBatchMode = ref(false)
 const selectedLinks = ref(new Set())
 const batchTargetCategory = ref('未分類')
 
+// Toast 通知系統
+const toasts = ref([]) // [{ id, message, type }]
+let toastCounter = 0
+const showToast = (message, type = 'success') => {
+  const id = ++toastCounter
+  toasts.value.push({ id, message, type })
+  setTimeout(() => {
+    toasts.value = toasts.value.filter(t => t.id !== id)
+  }, 3200)
+}
+
 // 從 localStorage 載入使用者的自訂分類
 const loadCustomCategories = () => {
   const saved = localStorage.getItem(`linksort_custom_categories_${props.user.id}`)
@@ -101,7 +112,7 @@ onMounted(async () => {
     // 3. 稍微延遲一下下，確保 Vue 已經更新了 DOM 和變數，再執行 addLink
     setTimeout(async () => {
       console.log('捷徑自動偵測到網址，準備儲存:', newUrl.value);
-      await addLink();
+      await addLink(true); // 傳入 fromShortcut = true
 
       // 4. 存完後再清空網址列
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -157,7 +168,7 @@ const fetchOgData = async (url) => {
   return { title: null, description: null, thumbnail_url: null }
 }
 
-const addLink = async () => {
+const addLink = async (fromShortcut = false) => {
   if (!newUrl.value) return
   const platform = parseCategory(newUrl.value)
   const tempUrl = newUrl.value
@@ -183,12 +194,17 @@ const addLink = async () => {
     .single()
 
   if (error) {
-    alert('儲存失敗：請確認您已執行 database_update.sql，且 thumbnail_url/description 欄位已存在！\n' + error.message)
+    showToast('❌ 儲存失敗：' + error.message, 'error')
     return
   }
 
   if (data) {
     links.value.unshift(data)
+    if (fromShortcut) {
+      showToast('✅ 捷徑新增成功！正在抓取標題...')
+    } else {
+      showToast('✅ 連結已儲存！')
+    }
 
     // 背景異步抓 OG 資料，不阻塞 UI
     fetchOgData(tempUrl).then(async (og) => {
@@ -351,6 +367,15 @@ const selectCollection = (col) => {
 
 <template>
   <div class="dashboard-layout">
+    <!-- Toast 通知區域 -->
+    <div class="toast-container">
+      <transition-group name="toast-anim">
+        <div v-for="toast in toasts" :key="toast.id" class="toast" :class="toast.type">
+          {{ toast.message }}
+        </div>
+      </transition-group>
+    </div>
+
     <!-- 手機遮罩背景 -->
     <div class="sidebar-overlay" :class="{ active: isSidebarOpen }" @click="closeSidebar"></div>
 
@@ -388,9 +413,14 @@ const selectCollection = (col) => {
           </li>
           <li v-for="cat in customCategories" :key="cat" :class="{ active: activeCollection === cat }"
             class="collection-item">
+            <!-- 名稱與編輯按鈕橫排，編輯按鈕永遠可見 -->
             <span class="list-text" @click="selectCollection(cat)">{{ cat }}</span>
             <button class="edit-cat-btn" @click.stop="editCustomCategory(cat)" title="編輯分類名稱">
-              ✎
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
             </button>
           </li>
         </ul>
@@ -639,22 +669,30 @@ const selectCollection = (col) => {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  opacity: 0;
+  opacity: 0.45;
+  /* 永遠可見，手機上不需要 hover 才能點擊 */
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 5px 6px;
+  border-radius: 6px;
   transition: all 0.2s;
-  min-width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
+  /* a11y 觸控目標大小 */
+  flex-shrink: 0;
 }
 
 .collection-item:hover .edit-cat-btn {
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
-.edit-cat-btn:hover {
+.edit-cat-btn:hover,
+.edit-cat-btn:active {
   opacity: 1 !important;
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent-color);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .color-dot {
@@ -1092,28 +1130,140 @@ const selectCollection = (col) => {
     gap: 0.85rem;
   }
 
-  /* 批次工具列手機適配 */
+  /* 批次工具列：手機分區塊式設計 */
   .batch-action-bar {
+    /* 重置為基本排版，手機重建 */
     flex-direction: column;
     border-radius: 20px;
     bottom: 1rem;
-    padding: 1rem 1.25rem;
-    width: 94%;
-    gap: 0.75rem;
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    /* 不要用 % width + translateX，改用 left/right 區大小 */
+    transform: none;
+    /* 覆寫掉桌面版的 translateX(-50%) */
+    max-width: none;
+    padding: 1rem;
+    gap: 0.85rem;
+    animation: slideUp-mobile 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
+  @keyframes slideUp-mobile {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 已選筆數：區塊占滿寬 */
+  .batch-info {
+    width: 100%;
+    text-align: center;
+    font-size: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* 標籤選擇 + 確認按鈕：占滿寬並排 */
   .batch-controls {
     width: 100%;
-    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 0.6rem;
   }
 
+  /* 下拉選單充滿剰餘空間 */
   .batch-select {
-    flex-grow: 1;
+    flex: 1;
     min-width: 0;
+    font-size: 0.92rem;
+    padding: 0.55rem 0.6rem;
+    height: 44px;
+    /* 手機觸控最小高度 */
+  }
+
+  /* 確認按鈕固定寬度，不被沪縮 */
+  .confirm-batch-btn {
+    flex-shrink: 0;
+    padding: 0 1rem;
+    height: 44px;
+    font-size: 0.92rem;
   }
 
   .section-title {
     font-size: 1rem;
+  }
+}
+
+/* ============================================
+   Toast 通知
+   ============================================ */
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast {
+  background: rgba(30, 30, 50, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  padding: 0.7rem 1.2rem;
+  border-radius: 40px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.01em;
+}
+
+.toast.error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(80, 20, 20, 0.92);
+}
+
+/* toast 動畫 */
+.toast-anim-enter-active {
+  animation: toast-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toast-anim-leave-active {
+  animation: toast-out 0.25s ease forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
   }
 }
 </style>
