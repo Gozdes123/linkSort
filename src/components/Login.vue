@@ -12,23 +12,25 @@ const handleLogin = async () => {
   loading.value = true
   errorMessage.value = ''
   successMessage.value = ''
-  
-  // 使用 Supabase 的 Magic Link (OTP) 進行無密碼登入
+
+  // 核心修正：動態組合當前網址 (包含 https://domain.com/repo-name/)
+  // 這樣在本地開發會是 localhost，部署後會是 github.io/linkSort/
+  const redirectUrl = window.location.origin + window.location.pathname
+
   const { error } = await supabase.auth.signInWithOtp({
     email: email.value,
     options: {
-      // 這裡設定當從信件點擊連結後，要跳轉回來的網址
-      emailRedirectTo: window.location.origin
+      // 傳送正確的跳轉地址給 Supabase
+      emailRedirectTo: redirectUrl
     }
   })
 
-  // 這邊故意使用 SweetAlert2 或更好的 UX 其實也可以，但我們先用簡單的文字顯示
   if (error) {
     errorMessage.value = error.message
   } else {
     successMessage.value = '登入連結已發送！請去您的信箱收信，並點擊信中的連結即可登入。'
   }
-  
+
   loading.value = false
 }
 </script>
@@ -47,15 +49,10 @@ const handleLogin = async () => {
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="input-group">
           <label>電子信箱 Email (無密碼登入)</label>
-          <input 
-            type="email" 
-            v-model="email" 
-            placeholder="friend@example.com"
-            required
-            :disabled="successMessage !== ''"
-          />
+          <input type="email" v-model="email" placeholder="friend@example.com" required
+            :disabled="successMessage !== ''" />
         </div>
-        
+
         <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
         <div v-if="successMessage" class="success-box">
           <span class="icon">📬</span>
@@ -218,6 +215,8 @@ input:disabled {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
