@@ -414,7 +414,7 @@ const selectCollection = (col) => {
           <span class="logo-icon">🔗</span>
           <h2>LinkSort</h2>
         </div>
-        <p class="user-greeting">哈囉，{{ user.email.split('@')[0] }}</p>
+        <p class="user-greeting">哈囉，{{ user.user_metadata?.display_name || user.email.split('@')[0] }}</p>
       </div>
 
       <div class="sidebar-nav">
