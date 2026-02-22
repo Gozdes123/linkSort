@@ -38,27 +38,42 @@ const showToast = (message, type = 'success') => {
   }, 3200)
 }
 
-// 從 localStorage 載入使用者的自訂分類
-const loadCustomCategories = () => {
-  const saved = localStorage.getItem(`linksort_custom_categories_${props.user.id}`)
-  if (saved) {
-    customCategories.value = JSON.parse(saved)
+// 從 Supabase 載入使用者的自訂分類
+const loadCustomCategories = async () => {
+  const { data, error } = await supabase
+    .from('custom_categories')
+    .select('name')
+    .eq('user_id', props.user.id)
+
+  if (!error && data) {
+    customCategories.value = data.map(c => c.name)
   }
 }
 
-// 儲存使用者的自訂分類到 localStorage
-const saveCustomCategories = () => {
-  localStorage.setItem(`linksort_custom_categories_${props.user.id}`, JSON.stringify(customCategories.value))
+// 儲存新的自訂分類到 Supabase
+// (這裡不再需要全量覆蓋，而是改成單筆新增/刪除)
+const addCategoryToDB = async (name) => {
+  await supabase.from('custom_categories').insert([
+    { user_id: props.user.id, name: name }
+  ])
 }
 
-const createCustomCategory = () => {
+const deleteCategoryFromDB = async (name) => {
+  await supabase.from('custom_categories').delete()
+    .eq('user_id', props.user.id)
+    .eq('name', name)
+}
+
+const createCustomCategory = async () => {
   const name = prompt('請輸入新分類名稱 (例如：設計靈感、工作用)：')
   if (name && name.trim() !== '') {
     const trimmed = name.trim()
     if (!customCategories.value.includes(trimmed) && trimmed !== '全部收藏' && trimmed !== '未分類') {
+      // 先加到畫面
       customCategories.value.push(trimmed)
-      saveCustomCategories()
-      // 修改：不要自動跳轉到新分類，留在原地
+      // 更新到後端
+      await addCategoryToDB(trimmed)
+      // 不自動跳轉到新分類，留在原地
     } else {
       alert('這個分類已經存在或名稱無法使用囉！')
     }
@@ -80,16 +95,14 @@ const fetchLinks = async () => {
       custom_category: l.custom_category || '未分類'
     }))
 
-    // 自動把現有資料的分類加入 customCategories
+    // 自動把現有資料的分類加入 customCategories（相容舊資料）
     const existingCats = new Set(links.value.filter(l => l.custom_category && l.custom_category !== '未分類').map(l => l.custom_category))
-    let changed = false
-    existingCats.forEach(cat => {
+    existingCats.forEach(async cat => {
       if (!customCategories.value.includes(cat)) {
         customCategories.value.push(cat)
-        changed = true
+        await addCategoryToDB(cat) // 順便把舊的本機分類同步上雲端
       }
     })
-    if (changed) saveCustomCategories()
   }
   isLoadingInitial.value = false
 }
@@ -97,6 +110,8 @@ const fetchLinks = async () => {
 onMounted(async () => {
   loadCustomCategories()
   await fetchLinks()
+
+  // 取消 Storage 事件監聽，現在改用資料庫了！
 
   const urlParams = new URLSearchParams(window.location.search);
   const sharedUrl = urlParams.get('url');
@@ -362,11 +377,13 @@ const editCustomCategory = async (oldName) => {
     return
   }
 
-  // 2. 更新本地端 localStorage 裡的分類清單
+  // 2. 更新雲端分類名稱 (透過刪舊增新達成)
+  await deleteCategoryFromDB(oldName)
+  await addCategoryToDB(trimmedNewName)
+
   const idx = customCategories.value.indexOf(oldName)
   if (idx !== -1) {
     customCategories.value[idx] = trimmedNewName
-    saveCustomCategories()
   }
 
   // 3. 更新目前顯示在畫面上的連結資料
@@ -399,9 +416,9 @@ const deleteCustomCategory = async (catName) => {
     return
   }
 
-  // 2. 從本地名單中移除
+  // 2. 從資料庫與本地名單中移除
   customCategories.value = customCategories.value.filter(c => c !== catName)
-  saveCustomCategories()
+  await deleteCategoryFromDB(catName)
 
   // 3. 更新畫面中原本是這個分類的資料
   links.value = links.value.map(l =>
