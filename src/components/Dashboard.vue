@@ -58,8 +58,7 @@ const createCustomCategory = () => {
     if (!customCategories.value.includes(trimmed) && trimmed !== '全部收藏' && trimmed !== '未分類') {
       customCategories.value.push(trimmed)
       saveCustomCategories()
-      activeCollection.value = trimmed
-      activePlatform.value = '全部來源'
+      // 修改：不要自動跳轉到新分類，留在原地
     } else {
       alert('這個分類已經存在或名稱無法使用囉！')
     }
