@@ -365,6 +365,15 @@ const editCustomCategory = async (oldName) => {
 }
 
 const handleLogout = async () => {
+  try {
+    const liff = (await import('@line/liff')).default
+    await liff.init({ liffId: '2009194598-nEng9eZX' }) // 確保初始化才能安全呼叫
+    if (liff.isLoggedIn()) {
+      liff.logout()
+    }
+  } catch (e) {
+    console.error('LIFF Logout 錯誤:', e)
+  }
   await supabase.auth.signOut()
 }
 

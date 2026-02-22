@@ -2,8 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { supabase } from '../lib/supabase'
 
-const LIFF_ID = '2009194191-euPIQq1O'
+const LIFF_ID = '2009194598-nEng9eZX'
 const EDGE_FUNCTION_URL = 'https://vnzolmsjftcqcyrvhall.supabase.co/functions/v1/liff-auth'
+const SUPABASE_ANON_KEY = 'sb_publishable_SaLhF_xj1c4SLl1S3ww-Ag_9odbsPho'
 
 const phase = ref('init')   // 'init' | 'logging-in' | 'error'
 const errorMsg = ref('')
@@ -18,6 +19,9 @@ const login = async () => {
     const liff = (await import('@line/liff')).default
     await liff.init({ liffId: LIFF_ID })
 
+    console.log('[LIFF] isLoggedIn:', liff.isLoggedIn())
+    console.log('[LIFF] isInClient:', liff.isInClient())
+
     // ── 2. 尚未登入 → 觸發 LINE OAuth 跳轉 ───────────────────────────
     if (!liff.isLoggedIn()) {
       statusMsg.value = '正在跳轉至 LINE 登入…'
@@ -25,17 +29,30 @@ const login = async () => {
       return  // 頁面會跳轉，不需繼續
     }
 
-    // ── 3. 已登入 → 取得 ID Token 並呼叫 Edge Function ───────────────
+    // ── 3. 已登入 → 取得 Access Token 並呼叫 Edge Function ──────────
     phase.value = 'logging-in'
     statusMsg.value = '驗證身份中，請稍候…'
 
-    const idToken = liff.getIDToken()
-    if (!idToken) throw new Error('無法取得 LINE ID Token，請重試')
+    const accessToken = liff.getAccessToken()
+    console.log('[LIFF] accessToken:', accessToken ? '已取得（長度:' + accessToken.length + '）' : 'null')
+
+    // accessToken 為 null 代表 LIFF Session 不完整，強制重新登入
+    if (!accessToken) {
+      console.warn('[LIFF] Access Token 為空，重新執行 login()')
+      liff.logout()
+      await new Promise(r => setTimeout(r, 500))
+      liff.login()
+      return
+    }
 
     const res = await fetch(EDGE_FUNCTION_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id_token: idToken }),
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ access_token: accessToken }),
     })
 
     const result = await res.json()
