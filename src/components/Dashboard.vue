@@ -380,6 +380,41 @@ const editCustomCategory = async (oldName) => {
   }
 }
 
+// 刪除自訂分類
+const deleteCustomCategory = async (catName) => {
+  if (catName === '未分類' || catName === '全部收藏') return
+
+  const confirmDelete = confirm(`確定要刪除分類「${catName}」嗎？\n\n注意：此分類下的所有連結將會被移至「未分類」。`)
+  if (!confirmDelete) return
+
+  // 1. 將該分類下的所有連結，改為「未分類」
+  const { error } = await supabase
+    .from('links')
+    .update({ custom_category: '未分類' })
+    .eq('custom_category', catName)
+    .eq('user_id', props.user.id)
+
+  if (error) {
+    alert('刪除分類失敗：' + error.message)
+    return
+  }
+
+  // 2. 從本地名單中移除
+  customCategories.value = customCategories.value.filter(c => c !== catName)
+  saveCustomCategories()
+
+  // 3. 更新畫面中原本是這個分類的資料
+  links.value = links.value.map(l =>
+    l.custom_category === catName ? { ...l, custom_category: '未分類' } : l
+  )
+
+  // 4. 如果目前正在看這個分類，跳回「全部收藏」
+  if (activeCollection.value === catName) {
+    activeCollection.value = '全部收藏'
+  }
+  showToast(`已刪除分類「${catName}」`)
+}
+
 const handleLogout = async () => {
   try {
     const liff = (await import('@line/liff')).default
@@ -459,13 +494,22 @@ const selectCollection = (col) => {
             class="collection-item">
             <!-- 名稱與編輯按鈕橫排，編輯按鈕永遠可見 -->
             <span class="list-text" @click="selectCollection(cat)">{{ cat }}</span>
-            <button class="edit-cat-btn" @click.stop="editCustomCategory(cat)" title="編輯分類名稱">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
+            <div class="category-actions">
+              <button class="edit-cat-btn" @click.stop="editCustomCategory(cat)" title="編輯分類名稱">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="delete-cat-btn" @click.stop="deleteCustomCategory(cat)" title="刪除分類">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </li>
         </ul>
         <button class="add-category-btn" @click="createCustomCategory">
@@ -714,11 +758,17 @@ const selectCollection = (col) => {
   white-space: nowrap;
 }
 
-.edit-cat-btn {
+.category-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.edit-cat-btn,
+.delete-cat-btn {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  opacity: 0.45;
+  opacity: 0.35;
   /* 永遠可見，手機上不需要 hover 才能點擊 */
   cursor: pointer;
   padding: 5px 6px;
@@ -733,8 +783,9 @@ const selectCollection = (col) => {
   flex-shrink: 0;
 }
 
-.collection-item:hover .edit-cat-btn {
-  opacity: 0.8;
+.collection-item:hover .edit-cat-btn,
+.collection-item:hover .delete-cat-btn {
+  opacity: 0.7;
 }
 
 .edit-cat-btn:hover,
@@ -742,6 +793,13 @@ const selectCollection = (col) => {
   opacity: 1 !important;
   color: var(--accent-color);
   background: rgba(99, 102, 241, 0.12);
+}
+
+.delete-cat-btn:hover,
+.delete-cat-btn:active {
+  opacity: 1 !important;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .color-dot {
