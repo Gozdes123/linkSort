@@ -1,11 +1,13 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import Login from './components/Login.vue'
 import Dashboard from './components/Dashboard.vue'
 import { supabase } from './lib/supabase'
 
 const user = ref(null)
 const isLoading = ref(true)
+let authSubscription = null
+let signedOutAt = 0  // 記錄最後一次登出的時間點
 
 onMounted(async () => {
   try {
@@ -22,9 +24,30 @@ onMounted(async () => {
     isLoading.value = false
   }
 
-  supabase.auth.onAuthStateChange((event, session) => {
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    console.log('[Auth] event:', event, '| user:', session?.user?.id ?? 'null')
+
+    if (event === 'SIGNED_OUT') {
+      signedOutAt = Date.now()
+      user.value = null
+      return
+    }
+
+    // 登出後 3 秒內，忽略所有重新登入事件（防止 token 自動刷新導致意外恢復登入狀態）
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (Date.now() - signedOutAt < 3000) {
+        console.log('[Auth] 剛剛登出，忽略此事件:', event)
+        return
+      }
+    }
+
     user.value = session?.user || null
   })
+  authSubscription = data.subscription
+})
+
+onUnmounted(() => {
+  authSubscription?.unsubscribe()
 })
 </script>
 

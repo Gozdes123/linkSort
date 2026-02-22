@@ -433,15 +433,10 @@ const deleteCustomCategory = async (catName) => {
 }
 
 const handleLogout = async () => {
-  try {
-    const liff = (await import('@line/liff')).default
-    await liff.init({ liffId: '2009194598-nEng9eZX' }) // 確保初始化才能安全呼叫
-    if (liff.isLoggedIn()) {
-      liff.logout()
-    }
-  } catch (e) {
-    console.error('LIFF Logout 錯誤:', e)
-  }
+  // 設定登出旗標，Login.vue 看到這個旗標就不會自動執行登入
+  sessionStorage.setItem('liff_just_logged_out', 'true')
+  // 只做 Supabase 登出，LIFF 的 token 由 Login.vue 在下次掛載時清除
+  // 不在這裡碰 liff.logout()，避免它在某些瀏覽器觸發重新導向，中斷 signOut
   await supabase.auth.signOut()
 }
 

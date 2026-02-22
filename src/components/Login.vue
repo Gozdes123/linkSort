@@ -6,42 +6,42 @@ const LIFF_ID = '2009194598-nEng9eZX'
 const EDGE_FUNCTION_URL = 'https://vnzolmsjftcqcyrvhall.supabase.co/functions/v1/liff-auth'
 const SUPABASE_ANON_KEY = 'sb_publishable_SaLhF_xj1c4SLl1S3ww-Ag_9odbsPho'
 
-const phase = ref('init')   // 'init' | 'logging-in' | 'error'
+/**
+ * phase 說明:
+ *  'idle'       → 顯示「使用 LINE 登入」按鈕
+ *  'completing' → 正在向後端驗證（轉圈狀態）
+ *  'error'      → 發生錯誤
+ */
+const phase = ref('idle')
 const errorMsg = ref('')
-const statusMsg = ref('正在啟動 LINE 登入…')
+const statusMsg = ref('驗證身份中，請稍候…')
 
-const login = async () => {
+// 用來避免 liff.init() 重複呼叫的 Promise 快取
+let liffReadyPromise = null
+
+const getLiff = async () => {
+  if (!liffReadyPromise) {
+    liffReadyPromise = (async () => {
+      const liff = (await import('@line/liff')).default
+      await liff.init({ liffId: LIFF_ID })
+      return liff
+    })()
+  }
+  return liffReadyPromise
+}
+
+/** 已取得 LIFF token，向後端換 Supabase session */
+const completeAuth = async (liff) => {
+  phase.value = 'completing'
+  statusMsg.value = '驗證身份中，請稍候…'
+
   try {
-    // ── 1. 動態載入並初始化 LIFF SDK ──────────────────────────────────
-    phase.value = 'init'
-    statusMsg.value = '正在初始化 LINE…'
-
-    const liff = (await import('@line/liff')).default
-    await liff.init({ liffId: LIFF_ID })
-
-    console.log('[LIFF] isLoggedIn:', liff.isLoggedIn())
-    console.log('[LIFF] isInClient:', liff.isInClient())
-
-    // ── 2. 尚未登入 → 觸發 LINE OAuth 跳轉 ───────────────────────────
-    if (!liff.isLoggedIn()) {
-      statusMsg.value = '正在跳轉至 LINE 登入…'
-      liff.login()
-      return  // 頁面會跳轉，不需繼續
-    }
-
-    // ── 3. 已登入 → 取得 Access Token 並呼叫 Edge Function ──────────
-    phase.value = 'logging-in'
-    statusMsg.value = '驗證身份中，請稍候…'
-
     const accessToken = liff.getAccessToken()
-    console.log('[LIFF] accessToken:', accessToken ? '已取得（長度:' + accessToken.length + '）' : 'null')
-
-    // accessToken 為 null 代表 LIFF Session 不完整，強制重新登入
     if (!accessToken) {
-      console.warn('[LIFF] Access Token 為空，重新執行 login()')
+      console.warn('[LIFF] accessToken 為空，清除 LIFF 狀態')
       liff.logout()
-      await new Promise(r => setTimeout(r, 500))
-      liff.login()
+      liffReadyPromise = null
+      phase.value = 'idle'
       return
     }
 
@@ -56,21 +56,21 @@ const login = async () => {
     })
 
     const result = await res.json()
+    if (!res.ok) throw new Error(result.error || '伺服器驗證失敗')
 
-    if (!res.ok) {
-      throw new Error(result.error || '伺服器驗證失敗')
-    }
-
-    // ── 4. 用 token_hash 完成 Supabase 登入 ──────────────────────────
-    statusMsg.value = '登入完成，正在載入…'
+    statusMsg.value = '登入成功，正在載入…'
     const { error: authError } = await supabase.auth.verifyOtp({
       token_hash: result.token_hash,
       type: 'email',
     })
 
-    if (authError) throw new Error('登入失敗：' + authError.message)
+    if (authError) {
+      liff.logout()
+      liffReadyPromise = null
+      throw new Error('登入驗證失敗：' + authError.message)
+    }
 
-    // 成功！App.vue 的 onAuthStateChange 會自動切換至 Dashboard
+    // 成功！App.vue 的 onAuthStateChange 會切換到 Dashboard
 
   } catch (e) {
     console.error('[LIFF Login Error]', e)
@@ -79,7 +79,60 @@ const login = async () => {
   }
 }
 
-onMounted(login)
+/** onMounted 時執行：判斷是「剛登出」還是「從 LINE 回來」*/
+const initAndCheck = async () => {
+  // ⚠️ 第一步：同步讀取旗標，這是最高優先順序的判斷
+  // 必須在所有 async 操作之前，確保「登出後顯示按鈕」的邏輯不被任何 LIFF 操作覆蓋
+  const justLoggedOut = sessionStorage.getItem('liff_just_logged_out') === 'true'
+
+  if (justLoggedOut) {
+    // 清除旗標，顯示登入按鈕，完全不觸碰 LIFF
+    // LIFF token 讓它自然留在 localStorage，不主動 logout
+    // （反正按鈕點下去時會重新 init，isLoggedIn() = true 的話直接完成 auth 也 ok）
+    sessionStorage.removeItem('liff_just_logged_out')
+    // phase 維持 'idle' → 顯示登入按鈕，等使用者手動點
+    return
+  }
+
+  // 沒有登出旗標，才進行 LIFF 初始化與自動登入判斷
+  try {
+    const liff = await getLiff()
+    console.log('[LIFF] isLoggedIn:', liff.isLoggedIn())
+
+    if (liff.isLoggedIn()) {
+      // LIFF 已登入 = 使用者從 LINE OAuth 跳回來了，自動完成 Supabase 認證
+      await completeAuth(liff)
+    }
+    // 若 LIFF 不是登入狀態，phase 維持 'idle' → 顯示登入按鈕
+  } catch (e) {
+    console.error('[LIFF] 初始化失敗:', e)
+    liffReadyPromise = null
+    // 初始化失敗不顯示錯誤，讓使用者自己點按鈕重試
+    // phase 維持 'idle'
+  }
+}
+
+/** 使用者手動點擊「使用 LINE 登入」按鈕 */
+const startLineLogin = async () => {
+  try {
+    const liff = await getLiff()
+
+    if (liff.isLoggedIn()) {
+      // 若 LIFF 恰好已登入（LIFF token 還在），直接完成
+      await completeAuth(liff)
+    } else {
+      // 跳轉到 LINE OAuth，授權後會帶著 code 回來，initAndCheck 會自動完成
+      liff.login()
+    }
+  } catch (e) {
+    console.error('[LIFF] startLineLogin 錯誤:', e)
+    liffReadyPromise = null
+    phase.value = 'error'
+    errorMsg.value = e.message || '無法啟動 LINE 登入，請重試'
+  }
+}
+
+onMounted(initAndCheck)
 </script>
 
 <template>
@@ -93,23 +146,36 @@ onMounted(login)
         <p>你的個人連結收藏庫</p>
       </div>
 
-      <!-- 載入中 / 跳轉中 -->
-      <div v-if="phase !== 'error'" class="status-area">
+      <!-- ① 閒置狀態：顯示登入按鈕 -->
+      <div v-if="phase === 'idle'" class="action-area">
+        <p class="hint-text">使用您的 LINE 帳號快速登入</p>
+        <button class="line-login-btn" @click="startLineLogin">
+          <span class="line-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
+              <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.627.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+            </svg>
+          </span>
+          使用 LINE 登入
+        </button>
+      </div>
+
+      <!-- ② 驗證中 -->
+      <div v-else-if="phase === 'completing'" class="status-area">
         <div class="spinner-ring"></div>
         <p class="status-text">{{ statusMsg }}</p>
       </div>
 
-      <!-- 錯誤狀態 -->
+      <!-- ③ 錯誤狀態 -->
       <div v-else class="error-area">
         <div class="error-icon">⚠️</div>
         <p class="error-text">{{ errorMsg }}</p>
-        <button class="retry-btn" @click="login">
+        <button class="line-login-btn" @click="startLineLogin">
           <span class="line-icon">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
               <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.627.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
             </svg>
           </span>
-          使用 LINE 重新登入
+          重新使用 LINE 登入
         </button>
       </div>
 
@@ -140,9 +206,7 @@ onMounted(login)
 }
 
 /* ── Brand ── */
-.brand {
-  text-align: center;
-}
+.brand { text-align: center; }
 
 .logo-wrap {
   display: inline-flex;
@@ -157,20 +221,27 @@ onMounted(login)
   box-shadow: 0 4px 24px rgba(99, 102, 241, 0.4);
 }
 
-.brand h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -1px;
-  margin: 0 0 0.35rem;
+.brand h1 { font-size: 2rem; font-weight: 700; letter-spacing: -1px; margin: 0 0 0.35rem; }
+.brand p  { font-size: 0.9rem; color: var(--text-secondary); margin: 0; }
+
+/* ── 登入按鈕區域 ── */
+.action-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
 }
 
-.brand p {
-  font-size: 0.9rem;
+.hint-text {
+  font-size: 0.875rem;
   color: var(--text-secondary);
   margin: 0;
+  text-align: center;
+  opacity: 0.8;
 }
 
-/* ── Status ── */
+/* ── 驗證中 ── */
 .status-area {
   display: flex;
   flex-direction: column;
@@ -196,11 +267,9 @@ onMounted(login)
   animation: spin 0.85s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Error ── */
+/* ── 錯誤 ── */
 .error-area {
   display: flex;
   flex-direction: column;
@@ -209,9 +278,7 @@ onMounted(login)
   width: 100%;
 }
 
-.error-icon {
-  font-size: 2rem;
-}
+.error-icon { font-size: 2rem; }
 
 .error-text {
   font-size: 0.875rem;
@@ -227,14 +294,14 @@ onMounted(login)
   box-sizing: border-box;
 }
 
-/* ── LINE 按鈕 ── */
-.retry-btn {
+/* ── LINE 登入按鈕 ── */
+.line-login-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
   width: 100%;
-  padding: 0.9rem 1.25rem;
+  padding: 0.95rem 1.25rem;
   background: #06C755;
   color: #fff;
   border: none;
@@ -247,18 +314,13 @@ onMounted(login)
   box-shadow: 0 4px 16px rgba(6, 199, 85, 0.35);
 }
 
-.retry-btn:hover {
+.line-login-btn:hover {
   background: #05b34c;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(6, 199, 85, 0.45);
 }
 
-.retry-btn:active {
-  transform: translateY(0);
-}
+.line-login-btn:active { transform: translateY(0); }
 
-.line-icon {
-  display: inline-flex;
-  align-items: center;
-}
+.line-icon { display: inline-flex; align-items: center; }
 </style>
