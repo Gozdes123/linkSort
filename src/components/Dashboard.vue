@@ -177,6 +177,23 @@ const fetchOgData = async (url) => {
     const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`)
     const json = await res.json()
     if (json.status === 'success') {
+      const fetchedTitle = json.data.title || ''
+      const fetchedDesc = json.data.description || ''
+      
+      // 防呆：過濾掉 Cloudflare 或擋爬蟲的安全防護提示
+      const isBlocked = 
+        fetchedTitle.toLowerCase().includes('attention required') || 
+        fetchedTitle.toLowerCase().includes('cloudflare') ||
+        fetchedDesc.toLowerCase().includes('security service to protect itself from online attacks')
+
+      if (isBlocked) {
+        return {
+          title: '無法取得預覽（網站安全防護）',
+          description: null,
+          thumbnail_url: null,
+        }
+      }
+
       return {
         title: json.data.title || null,
         description: json.data.description || null,
