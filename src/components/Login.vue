@@ -1,87 +1,72 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { supabase } from '../lib/supabase'
 
-const email = ref('')
-const password = ref('')
-const loading = ref(false)
-const error = ref('')
-const success = ref('')
-const mode = ref('login') // 'login' | 'register' | 'forgot'
+const LIFF_ID = '2009194191-euPIQq1O'
+const EDGE_FUNCTION_URL = 'https://vnzolmsjftcqcyrvhall.supabase.co/functions/v1/liff-auth'
 
-const switchMode = (m) => {
-  mode.value = m
-  error.value = ''
-  success.value = ''
-}
+const phase = ref('init')   // 'init' | 'logging-in' | 'error'
+const errorMsg = ref('')
+const statusMsg = ref('正在啟動 LINE 登入…')
 
-const translateError = (msg = '') => {
-  if (msg.includes('Invalid login credentials')) return '帳號或密碼錯誤，請再試一次'
-  if (msg.includes('User already registered')) return '此 Email 已經註冊，請直接登入'
-  if (msg.includes('Password should be at least')) return '密碼長度至少需要 6 個字元'
-  if (msg.includes('rate limit') || msg.includes('email rate limit'))
-    return '寄信次數已達上限（每小時 2 封），請稍後再試'
-  if (msg.includes('Unable to validate email')) return 'Email 格式不正確'
-  if (msg.includes('Email not confirmed')) return '帳號尚未驗證，請先去信箱點擊驗證連結'
-  return msg
-}
+const login = async () => {
+  try {
+    // ── 1. 動態載入並初始化 LIFF SDK ──────────────────────────────────
+    phase.value = 'init'
+    statusMsg.value = '正在初始化 LINE…'
 
-const handleSubmit = async () => {
-  if (!email.value) return
-  if (mode.value !== 'forgot' && !password.value) return
-  loading.value = true
-  error.value = ''
-  success.value = ''
+    const liff = (await import('@line/liff')).default
+    await liff.init({ liffId: LIFF_ID })
 
-  if (mode.value === 'login') {
-    const { error: e } = await supabase.auth.signInWithPassword({
-      email: email.value,
-      password: password.value,
-    })
-    if (e) error.value = translateError(e.message)
-    // 成功時 App.vue 的 onAuthStateChange 自動跳轉
-
-  } else if (mode.value === 'register') {
-    const redirectUrl = window.location.origin + window.location.pathname
-    const { data, error: e } = await supabase.auth.signUp({
-      email: email.value,
-      password: password.value,
-      options: {
-        emailRedirectTo: redirectUrl
-      }
-    })
-
-    if (e) {
-      error.value = translateError(e.message)
-    } else if (data?.user?.identities?.length === 0) {
-      error.value = '此 Email 已經註冊，請直接登入'
-    } else {
-      success.value = `驗證信已發送到 ${email.value}，點擊信中連結完成驗證後再回來登入`
-
-      // 確保註冊後即使 Supabase 產生了無效的快取 Session，也強制登出，避免使用者誤以為自己已經登入
-      if (data?.session) {
-        await supabase.auth.signOut()
-      }
+    // ── 2. 尚未登入 → 觸發 LINE OAuth 跳轉 ───────────────────────────
+    if (!liff.isLoggedIn()) {
+      statusMsg.value = '正在跳轉至 LINE 登入…'
+      liff.login()
+      return  // 頁面會跳轉，不需繼續
     }
 
-  } else if (mode.value === 'forgot') {
-    const redirectUrl = window.location.origin + window.location.pathname
-    const { error: e } = await supabase.auth.resetPasswordForEmail(email.value, {
-      redirectTo: redirectUrl,
+    // ── 3. 已登入 → 取得 ID Token 並呼叫 Edge Function ───────────────
+    phase.value = 'logging-in'
+    statusMsg.value = '驗證身份中，請稍候…'
+
+    const idToken = liff.getIDToken()
+    if (!idToken) throw new Error('無法取得 LINE ID Token，請重試')
+
+    const res = await fetch(EDGE_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_token: idToken }),
     })
-    if (e) {
-      error.value = translateError(e.message)
-    } else {
-      success.value = `密碼重設信已寄到 ${email.value}，請收信後點擊連結設定新密碼`
+
+    const result = await res.json()
+
+    if (!res.ok) {
+      throw new Error(result.error || '伺服器驗證失敗')
     }
+
+    // ── 4. 用 token_hash 完成 Supabase 登入 ──────────────────────────
+    statusMsg.value = '登入完成，正在載入…'
+    const { error: authError } = await supabase.auth.verifyOtp({
+      token_hash: result.token_hash,
+      type: 'email',
+    })
+
+    if (authError) throw new Error('登入失敗：' + authError.message)
+
+    // 成功！App.vue 的 onAuthStateChange 會自動切換至 Dashboard
+
+  } catch (e) {
+    console.error('[LIFF Login Error]', e)
+    phase.value = 'error'
+    errorMsg.value = e.message || '發生未知錯誤，請重試'
   }
-
-  loading.value = false
 }
+
+onMounted(login)
 </script>
 
 <template>
-  <div class="login-page">
+  <div class="liff-login-page">
     <div class="login-card glass-panel">
 
       <!-- Logo -->
@@ -91,58 +76,32 @@ const handleSubmit = async () => {
         <p>你的個人連結收藏庫</p>
       </div>
 
-      <!-- Tab 切換 -->
-      <div class="tabs">
-        <button :class="{ active: mode === 'login' }" @click="switchMode('login')">登入</button>
-        <button :class="{ active: mode === 'register' }" @click="switchMode('register')">註冊</button>
-        <button :class="{ active: mode === 'forgot' }" @click="switchMode('forgot')">忘記密碼</button>
+      <!-- 載入中 / 跳轉中 -->
+      <div v-if="phase !== 'error'" class="status-area">
+        <div class="spinner-ring"></div>
+        <p class="status-text">{{ statusMsg }}</p>
       </div>
 
-      <!-- Form -->
-      <form @submit.prevent="handleSubmit" class="form">
-
-        <div class="field">
-          <label>{{ mode === 'forgot' ? '請輸入你的 Email' : 'Email' }}</label>
-          <input type="email" v-model="email" placeholder="your@email.com" required autocomplete="email" />
-        </div>
-
-        <div class="field" v-if="mode !== 'forgot'">
-          <label>密碼</label>
-          <input type="password" v-model="password" placeholder="至少 6 個字元" required minlength="6"
-            autocomplete="current-password" />
-        </div>
-
-        <!-- 錯誤訊息 -->
-        <div v-if="error" class="msg error">⚠️ {{ error }}</div>
-        <!-- 成功訊息 -->
-        <div v-if="success" class="msg success">✅ {{ success }}</div>
-
-        <button type="submit" class="submit" :disabled="loading">
-          <span v-if="loading" class="spinner"></span>
-          <span v-else>
-            {{ mode === 'login' ? '登入' : mode === 'register' ? '建立帳號' : '發送重設密碼信' }}
+      <!-- 錯誤狀態 -->
+      <div v-else class="error-area">
+        <div class="error-icon">⚠️</div>
+        <p class="error-text">{{ errorMsg }}</p>
+        <button class="retry-btn" @click="login">
+          <span class="line-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.627.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+            </svg>
           </span>
+          使用 LINE 重新登入
         </button>
-
-      </form>
-
-      <!-- 底部提示 -->
-      <p class="hint" v-if="mode === 'login'">
-        還沒有帳號？<button class="link" @click="switchMode('register')">立即註冊</button>
-      </p>
-      <p class="hint" v-else-if="mode === 'register'">
-        已有帳號？<button class="link" @click="switchMode('login')">回到登入</button>
-      </p>
-      <p class="hint" v-else>
-        想起密碼了？<button class="link" @click="switchMode('login')">回到登入</button>
-      </p>
+      </div>
 
     </div>
   </div>
 </template>
 
 <style scoped>
-.login-page {
+.liff-login-page {
   width: 100%;
   min-height: 100vh;
   display: flex;
@@ -154,15 +113,16 @@ const handleSubmit = async () => {
 
 .login-card {
   width: 100%;
-  max-width: 420px;
-  padding: 2.25rem 2rem;
-  border-radius: 24px;
+  max-width: 380px;
+  padding: 2.5rem 2rem;
+  border-radius: 28px;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  align-items: center;
+  gap: 2rem;
 }
 
-/* ---- Brand ---- */
+/* ── Brand ── */
 .brand {
   text-align: center;
 }
@@ -171,20 +131,20 @@ const handleSubmit = async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 62px;
-  height: 62px;
-  font-size: 1.75rem;
-  border-radius: 18px;
+  width: 68px;
+  height: 68px;
+  font-size: 1.85rem;
+  border-radius: 20px;
   background: linear-gradient(135deg, var(--accent-glow), var(--accent-hover));
-  margin-bottom: 0.9rem;
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.4);
 }
 
 .brand h1 {
-  font-size: 1.9rem;
+  font-size: 2rem;
   font-weight: 700;
   letter-spacing: -1px;
-  margin: 0 0 0.3rem;
+  margin: 0 0 0.35rem;
 }
 
 .brand p {
@@ -193,164 +153,95 @@ const handleSubmit = async () => {
   margin: 0;
 }
 
-/* ---- Tabs ---- */
-.tabs {
-  display: flex;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
-  padding: 4px;
-  gap: 4px;
-}
-
-.tabs button {
-  flex: 1;
-  padding: 0.5rem 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.tabs button.active {
-  background: var(--accent-color);
-  color: #fff;
-  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
-}
-
-/* ---- Form ---- */
-.form {
+/* ── Status ── */
+.status-area {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 1rem;
+  width: 100%;
 }
 
-.field {
+.status-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
+  text-align: center;
+}
+
+/* ── Spinner ── */
+.spinner-ring {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error ── */
+.error-area {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
 }
 
-.field label {
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--text-secondary);
+.error-icon {
+  font-size: 2rem;
 }
 
-.field input {
-  padding: 0.75rem 1rem;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  color: var(--text-primary);
-  font-size: 1rem;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.2s, background 0.2s;
-  min-height: 48px;
-}
-
-.field input:focus {
-  border-color: var(--accent-color);
-  background: rgba(0, 0, 0, 0.35);
-}
-
-/* ---- Messages ---- */
-.msg {
+.error-text {
   font-size: 0.875rem;
-  border-radius: 8px;
-  padding: 0.65rem 0.9rem;
-  line-height: 1.5;
-}
-
-.msg.error {
   color: #fca5a5;
+  text-align: center;
+  margin: 0;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  line-height: 1.5;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.msg.success {
-  color: #6ee7b7;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-}
-
-/* ---- Submit ---- */
-.submit {
-  padding: 0.85rem;
-  background: var(--accent-color);
+/* ── LINE 按鈕 ── */
+.retry-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.9rem 1.25rem;
+  background: #06C755;
   color: #fff;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 1rem;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s;
-  min-height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(6, 199, 85, 0.35);
 }
 
-.submit:hover:not(:disabled) {
-  background: var(--accent-hover);
+.retry-btn:hover {
+  background: #05b34c;
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 6px 20px rgba(6, 199, 85, 0.45);
 }
 
-.submit:active:not(:disabled) {
+.retry-btn:active {
   transform: translateY(0);
 }
 
-.submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* ---- Hint ---- */
-.hint {
-  text-align: center;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.link {
-  background: none;
-  border: none;
-  color: var(--accent-color);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  font-family: inherit;
-}
-
-.link:hover {
-  color: var(--accent-hover);
-}
-
-/* ---- Spinner ---- */
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  display: inline-block;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.line-icon {
+  display: inline-flex;
+  align-items: center;
 }
 </style>

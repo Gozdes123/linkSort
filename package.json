@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@line/liff": "^2.27.3",
     "@supabase/supabase-js": "^2.97.0",
     "sweetalert2": "^11.26.20",
     "vue": "^3.5.25"
