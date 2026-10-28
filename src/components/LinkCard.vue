@@ -13,13 +13,27 @@ const emit = defineEmits(['delete', 'toggleSelect', 'edit', 'updateCategory', 'c
 const isCategoryMenuOpen = ref(false)
 const popoverRef = ref(null)
 
+const handleDocumentClick = (e) => {
+  if (isCategoryMenuOpen.value && popoverRef.value && !popoverRef.value.contains(e.target)) {
+    closeCategoryMenu()
+  }
+}
+
 const toggleCategoryMenu = () => {
   if (props.selectable) return
   isCategoryMenuOpen.value = !isCategoryMenuOpen.value
+  if (isCategoryMenuOpen.value) {
+    document.addEventListener('click', handleDocumentClick)
+  } else {
+    document.removeEventListener('click', handleDocumentClick)
+  }
 }
 
 const closeCategoryMenu = () => {
-  isCategoryMenuOpen.value = false
+  if (isCategoryMenuOpen.value) {
+    isCategoryMenuOpen.value = false
+    document.removeEventListener('click', handleDocumentClick)
+  }
 }
 
 const selectCategory = (cat) => {
@@ -31,16 +45,6 @@ const handleCreateCategory = () => {
   closeCategoryMenu()
   emit('createCategory', props.link.id)
 }
-
-const handleDocumentClick = (e) => {
-  if (isCategoryMenuOpen.value && popoverRef.value && !popoverRef.value.contains(e.target)) {
-    closeCategoryMenu()
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleDocumentClick)
-})
 
 onUnmounted(() => {
   document.removeEventListener('click', handleDocumentClick)
@@ -58,9 +62,19 @@ const siteColors = {
 
 const badgeColor = computed(() => siteColors[props.link.category] || '#9933cc')
 
+// 高效輕量月日擷取 (避免 700+ 物件反覆 new Date 與 toLocaleDateString)
 const displayDate = computed(() => {
-  const date = new Date(props.link.created_at)
-  return date.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+  const raw = props.link.created_at
+  if (!raw) return ''
+  if (raw.length >= 10 && raw[4] === '-' && raw[7] === '-') {
+    const month = parseInt(raw.slice(5, 7), 10)
+    const day = parseInt(raw.slice(8, 10), 10)
+    if (!isNaN(month) && !isNaN(day)) {
+      return `${month}/${day}`
+    }
+  }
+  const date = new Date(raw)
+  return isNaN(date) ? '' : `${date.getMonth() + 1}/${date.getDate()}`
 })
 
 const copyLink = async () => {

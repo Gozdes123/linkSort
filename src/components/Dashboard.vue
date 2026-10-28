@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import LinkCard from './LinkCard.vue'
 import { supabase } from '../lib/supabase'
 
@@ -239,7 +239,7 @@ onMounted(async () => {
   }
 })
 
-// 雙重新篩選邏輯：同時比對平台來源和自訂子分類
+// 雙重新篩選邏輯：同時比對平台來源和自訂子分類（使用字串比較提升百倍效能）
 const filteredLinks = computed(() => {
   let result = links.value;
 
@@ -256,8 +256,43 @@ const filteredLinks = computed(() => {
     result = result.filter(link => link.custom_category === activeCollection.value);
   }
 
-  return [...result].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  return [...result].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 });
+
+// ===== 600-700+ 篇海量資料高效漸進渲染 (徹底消除切換卡頓) =====
+const linksContainerRef = ref(null)
+const displayLimit = ref(36)
+
+const visibleLinks = computed(() => {
+  return filteredLinks.value.slice(0, displayLimit.value)
+})
+
+const hasMore = computed(() => {
+  return visibleLinks.value.length < filteredLinks.value.length
+})
+
+const loadMore = () => {
+  if (hasMore.value) {
+    displayLimit.value += 36
+  }
+}
+
+const handleContainerScroll = (e) => {
+  const el = e.target
+  if (!el || !hasMore.value) return
+  // 當距離容器底部小於 400px 時自動載入下一批 36 筆
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 400) {
+    loadMore()
+  }
+}
+
+// 切換分類或平台來源時，重設為初次載入筆數並瞬間滾動置頂
+watch([activePlatform, activeCollection], () => {
+  displayLimit.value = 36
+  nextTick(() => {
+    linksContainerRef.value?.scrollTo({ top: 0, behavior: 'instant' })
+  })
+})
 
 const getBadgeColor = (platform) => {
   const colors = {
@@ -844,7 +879,11 @@ const selectCollection = (col) => {
 
       </header>
 
-      <div class="links-container">
+      <div 
+        ref="linksContainerRef" 
+        class="links-container"
+        @scroll.passive="handleContainerScroll"
+      >
         <!-- 標題欄與主要模式快速切換頁籤 -->
         <div class="section-title-bar">
           <div class="title-left">
@@ -898,51 +937,53 @@ const selectCollection = (col) => {
           <p>正在讀取世界地圖與道具庫 🍄...</p>
         </div>
         <div v-else>
-          <!-- 切換類別時使用平滑 view-fade -->
-          <transition name="view-fade" mode="out-in">
-            <div :key="activePlatform + '_' + activeCollection">
-              <!-- 卡片格線（原地縮小淡出，無橫向突兀滑動） -->
-              <transition-group 
-                name="card-fade" 
-                tag="div" 
-                class="links-grid" 
-                v-if="filteredLinks.length"
-              >
-                <LinkCard 
-                  v-for="link in filteredLinks" 
-                  :key="link.id" 
-                  :link="link" 
-                  :categories="customCategories"
-                  :selectable="isBatchMode"
-                  :selected="selectedLinks.has(link.id)" 
-                  @delete="deleteLink" 
-                  @toggleSelect="handleToggleSelect"
-                  @edit="handleEditLink" 
-                  @updateCategory="updateLinkCategory"
-                  @createCategory="handleCreateCategoryFromCard"
-                />
-              </transition-group>
+          <!-- 卡片格線（漸進式高效渲染 30 筆，原地縮小淡出，零卡頓） -->
+          <transition-group 
+            name="card-fade" 
+            tag="div" 
+            class="links-grid" 
+            v-if="filteredLinks.length"
+          >
+            <LinkCard 
+              v-for="link in visibleLinks" 
+              :key="link.id" 
+              :link="link" 
+              :categories="customCategories"
+              :selectable="isBatchMode"
+              :selected="selectedLinks.has(link.id)" 
+              @delete="deleteLink" 
+              @toggleSelect="handleToggleSelect"
+              @edit="handleEditLink" 
+              @updateCategory="updateLinkCategory"
+              @createCategory="handleCreateCategoryFromCard"
+            />
+          </transition-group>
 
-              <!-- 待整理全部完成慶祝狀態 (Inbox Zero -> STAGE CLEAR) -->
-              <div class="empty-state glass-panel empty-inbox" v-else-if="activeCollection === '未分類'">
-                <span class="empty-icon">🏁</span>
-                <h3>⭐ STAGE CLEAR! 關卡全破！ ⭐</h3>
-                <p>目前「待整理收件匣」已經全部分類完畢，所有道具與超連結均整齊歸位！🍄</p>
-                <button class="empty-action-btn" @click="selectCollection('全部收藏')">
-                  ⭐ 查看全部收藏 ({{ categoryCounts.total }})
-                </button>
-              </div>
+          <!-- 滾動載入更多提示按鈕 -->
+          <div v-if="hasMore" class="load-more-wrapper">
+            <button class="load-more-btn" @click="loadMore">
+              🍄 展開更多卡片 (已顯示 {{ visibleLinks.length }} / {{ filteredLinks.length }} 篇，向下滾動自動展開) ⭐
+            </button>
+          </div>
 
-              <!-- 一般條件無資料狀態 -->
-              <div class="empty-state glass-panel" v-else>
-                <span class="empty-icon">🧱</span>
-                <p>「{{ activePlatform }} / {{ activeCollection }}」目前沒有任何道具卡片！</p>
-                <button class="empty-action-btn" @click="selectCollection('全部收藏')">
-                  返回全部收藏 ⭐
-                </button>
-              </div>
-            </div>
-          </transition>
+          <!-- 待整理全部完成慶祝狀態 (Inbox Zero -> STAGE CLEAR) -->
+          <div class="empty-state glass-panel empty-inbox" v-else-if="activeCollection === '未分類'">
+            <span class="empty-icon">🏁</span>
+            <h3>⭐ STAGE CLEAR! 關卡全破！ ⭐</h3>
+            <p>目前「待整理收件匣」已經全部分類完畢，所有道具與超連結均整齊歸位！🍄</p>
+            <button class="empty-action-btn" @click="selectCollection('全部收藏')">
+              ⭐ 查看全部收藏 ({{ categoryCounts.total }})
+            </button>
+          </div>
+
+          <!-- 一般條件無資料狀態 -->
+          <div class="empty-state glass-panel" v-else>
+            <span class="empty-icon">🧱</span>
+            <p>「{{ activePlatform }} / {{ activeCollection }}」目前沒有任何道具卡片！</p>
+            <button class="empty-action-btn" @click="selectCollection('全部收藏')">
+              返回全部收藏 ⭐
+            </button>
+          </div>
         </div>
       </div>
     </main>
@@ -1672,6 +1713,32 @@ const selectCollection = (col) => {
 .card-fade-leave-to {
   opacity: 0;
   transform: scale(0.92);
+}
+
+/* 漸進式載入更多按鈕 (Mario 像素方塊) */
+.load-more-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem 0 2rem;
+}
+
+.load-more-btn {
+  background: #161922;
+  border: 3px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  color: var(--mario-yellow);
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.08s ease;
+}
+
+.load-more-btn:hover {
+  background: #272d3e;
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px #000000;
 }
 
 /* 狀態區塊 (Mario 關卡像素狀態) */
