@@ -93,7 +93,6 @@ const loadCustomCategories = async () => {
   }
 }
 
-// 儲存新的自訂分類到 Supabase
 const addCategoryToDB = async (name) => {
   if (isDevUser.value) return
   await supabase.from('custom_categories').insert([
@@ -109,13 +108,13 @@ const deleteCategoryFromDB = async (name) => {
 }
 
 const createCustomCategory = async (defaultName = '') => {
-  const name = prompt('請輸入新分類名稱 (例如：設計靈感、工作用)：', defaultName)
+  const name = prompt('🍄 請輸入新關卡/分類名稱 (例如：關卡道具、攻略秘技、影音收藏)：', defaultName)
   if (name && name.trim() !== '') {
     const trimmed = name.trim()
     if (!customCategories.value.includes(trimmed) && trimmed !== '全部收藏' && trimmed !== '未分類') {
       customCategories.value.push(trimmed)
       await addCategoryToDB(trimmed)
-      showToast(`已建立新分類「${trimmed}」`)
+      showToast(`🍄 已新增分類標籤「${trimmed}」`)
       return trimmed
     } else {
       alert('這個分類已經存在或名稱無法使用囉！')
@@ -124,12 +123,12 @@ const createCustomCategory = async (defaultName = '') => {
   return null
 }
 
-// 從 Supabase 抓取資料（本機開發模式載入高擬真測試資料）
+// 從 Supabase 抓取資料（本機開發模式載入高擬真像素風測試資料）
 const fetchLinks = async () => {
   isLoadingInitial.value = true
 
   if (isDevUser.value) {
-    customCategories.value = ['設計靈感', '實用工具', '美食餐廳', '影音收藏']
+    customCategories.value = ['🎮 攻略秘技', '🍄 道具清單', '⭐ 影音精選', '🏰 閱讀筆記']
     links.value = [
       {
         id: 'mock-1',
@@ -144,49 +143,49 @@ const fetchLinks = async () => {
       {
         id: 'mock-2',
         url: 'https://www.instagram.com/p/C3abcde123',
-        title: '2026 台北捷運周邊超人氣甜點地圖推薦',
+        title: '🍄 2026 超人氣復古像素遊戲美術與地圖關卡設計大賞！',
         category: 'Instagram',
         custom_category: '未分類',
         created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        description: '精選 10 間捷運步行 5 分鐘內抵達的法式千層與戚風蛋糕！',
+        description: '精選 10 款極致 NES 與 16-bit 像素藝術傑作，從色彩搭配到瓦片地圖完整解析！',
         thumbnail_url: null,
       },
       {
         id: 'mock-3',
         url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        title: 'Vue 3 高性能動畫與響應式系統深度解析實戰',
+        title: '⭐ Super Mario Bros. 復古 8-Bit 像素音效與配樂創作幕後秘辛',
         category: 'YouTube',
         custom_category: '未分類',
         created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-        description: '帶你從源碼角度理解 TransitionGroup 與 FLIP 動畫實作細節。',
+        description: '近藤浩治經典遊戲音樂解析：方波、三角波與白噪聲如何譜寫傳奇冒險樂章。',
         thumbnail_url: null,
       },
       {
         id: 'mock-4',
         url: 'https://www.dcard.tw/f/tech/p/250000000',
-        title: '軟體工程師求職面試經驗分享：系統架構與前端性能優化',
+        title: '🎮 軟體工程師求職面試經驗分享：系統架構與前端性能優化',
         category: 'Dcard',
         custom_category: '未分類',
         created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-        description: '分享今年在各大科技廠的面試題庫與準備心得。',
+        description: '分享今年在各大科技廠的面試題庫與準備心得，給想轉職的冒險者參考～',
         thumbnail_url: null,
       },
       {
         id: 'mock-5',
         url: 'https://x.com/shadcn/status/178000000000',
-        title: 'New components added to the modern glassmorphism design system',
+        title: '🏰 Retro Pixel UI System: Chunky borders, hard shadows and 8-bit styling',
         category: 'X',
-        custom_category: '設計靈感',
+        custom_category: '🎮 攻略秘技',
         created_at: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
-        description: 'Beautiful, accessible components built with Tailwind CSS and Radix UI.',
+        description: 'Beautiful 8-bit retro components built for modern web applications.',
         thumbnail_url: null,
       },
       {
         id: 'mock-6',
         url: 'https://github.com/features/actions',
-        title: 'GitHub Actions: Automate your workflow from idea to production',
+        title: '⭐ GitHub Actions: Automate your workflow from idea to production',
         category: '其他來源',
-        custom_category: '實用工具',
+        custom_category: '🍄 道具清單',
         created_at: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
         description: 'CI/CD built directly into GitHub to automate your build and deploy pipelines.',
         thumbnail_url: null,
@@ -262,13 +261,13 @@ const filteredLinks = computed(() => {
 
 const getBadgeColor = (platform) => {
   const colors = {
-    Threads: 'var(--color-threads)',
-    Instagram: 'var(--color-instagram)',
-    Dcard: 'var(--color-dcard)',
-    YouTube: 'var(--color-youtube)',
-    X: 'var(--color-x)',
+    Threads: '#000000',
+    Instagram: '#e52521',
+    Dcard: '#0088cc',
+    YouTube: '#e52521',
+    X: '#0066cc',
   }
-  return colors[platform] || '#475569'
+  return colors[platform] || '#9933cc'
 }
 
 const parseCategory = (url) => {
@@ -350,7 +349,7 @@ const addLink = async (fromShortcut = false) => {
     }
     links.value.unshift(mockItem)
     isAdding.value = false
-    showToast(`✅ 已新增連結${targetCollection !== '未分類' ? '至「' + targetCollection + '」' : ''}！`)
+    showToast(`⭐ 成功收藏新連結${targetCollection !== '未分類' ? '至「' + targetCollection + '」' : ''}！`)
     return
   }
 
@@ -370,9 +369,9 @@ const addLink = async (fromShortcut = false) => {
   if (data) {
     links.value.unshift(data)
     if (fromShortcut) {
-      showToast('✅ 捷徑新增成功！正在抓取標題...')
+      showToast('🍄 捷徑新增成功！正在抓取標題...')
     } else {
-      showToast(`✅ 已新增連結${targetCollection !== '未分類' ? '至「' + targetCollection + '」' : ''}！`)
+      showToast(`⭐ 成功收藏新連結${targetCollection !== '未分類' ? '至「' + targetCollection + '」' : ''}！`)
     }
 
     fetchOgData(tempUrl).then(async (og) => {
@@ -406,7 +405,7 @@ const updateLinkCategory = async (linkId, newCategory, options = { showToast: tr
 
   // 2. 提供復原 Toast 按鈕
   if (options.showToast) {
-    showToast(`已分類至「${newCategory}」`, 'success', {
+    showToast(`🎀 已歸類到「${newCategory}」`, 'success', {
       label: '復原',
       onClick: () => {
         updateLinkCategory(linkId, oldCategory, { showToast: false })
@@ -423,7 +422,6 @@ const updateLinkCategory = async (linkId, newCategory, options = { showToast: tr
     .eq('id', linkId)
 
   if (error) {
-    // 復原
     links.value = links.value.map(l => {
       if (l.id === linkId) {
         return { ...l, custom_category: oldCategory }
@@ -445,7 +443,7 @@ const handleCreateCategoryFromCard = async (linkId) => {
 const deleteLink = async (id) => {
   if (isDevUser.value) {
     links.value = links.value.filter(link => link.id !== id)
-    showToast('已刪除連結')
+    showToast('🗑️ 已刪除連結')
     return
   }
 
@@ -455,6 +453,7 @@ const deleteLink = async (id) => {
     if (selectedLinks.value.has(id)) {
       selectedLinks.value.delete(id)
     }
+    showToast('🗑️ 已刪除連結')
   } else {
     alert('刪除失敗：' + error.message)
   }
@@ -476,7 +475,6 @@ const handleToggleSelect = (id) => {
   selectedLinks.value = newSet
 }
 
-// 批次全選 / 取消全選
 const isAllSelected = computed(() => {
   if (filteredLinks.value.length === 0) return false
   return filteredLinks.value.every(l => selectedLinks.value.has(l.id))
@@ -490,7 +488,6 @@ const toggleSelectAll = () => {
   }
 }
 
-// 批次移動分類：不跳轉頁面，保留在當前工作流，提供復原選項
 const applyBatchCategory = async () => {
   if (selectedLinks.value.size === 0) return
 
@@ -516,7 +513,7 @@ const applyBatchCategory = async () => {
   isBatchMode.value = false
   selectedLinks.value.clear()
 
-  showToast(`已將 ${count} 筆連結移至「${targetCategory}」`, 'success', {
+  showToast(`✨ 已將 ${count} 筆連結移至「${targetCategory}」`, 'success', {
     label: '復原',
     onClick: async () => {
       links.value = links.value.map(link => {
@@ -552,7 +549,7 @@ const applyBatchCategory = async () => {
 }
 
 const editLinkTitle = async (id, oldTitle) => {
-  const newTitle = prompt('請輸入新的標題：', oldTitle)
+  const newTitle = prompt('🌸 請輸入新的標題：', oldTitle)
   if (newTitle !== null && newTitle.trim() !== '') {
     if (isDevUser.value) {
       links.value = links.value.map(l =>
@@ -580,16 +577,15 @@ const handleEditLink = (id, oldTitle) => {
   editLinkTitle(id, oldTitle)
 }
 
-// 編輯子分類名稱
 const editCustomCategory = async (oldName) => {
   if (oldName === '未分類' || oldName === '全部收藏') return
 
-  const newName = prompt(`為「${oldName}」輸入新的名稱：`, oldName)
+  const newName = prompt(`為「${oldName}」輸入新的可愛名稱：`, oldName)
   if (!newName || newName.trim() === '' || newName === oldName) return
 
   const trimmedNewName = newName.trim()
   if (customCategories.value.includes(trimmedNewName)) {
-    alert('這個分類名稱已經存在囉！')
+    alert('這個標籤名稱已經存在囉！')
     return
   }
 
@@ -601,7 +597,7 @@ const editCustomCategory = async (oldName) => {
       .eq('user_id', props.user.id)
 
     if (error) {
-      alert('更新分類名稱失敗：' + error.message)
+      alert('更新標籤失敗：' + error.message)
       return
     }
 
@@ -623,11 +619,10 @@ const editCustomCategory = async (oldName) => {
   }
 }
 
-// 刪除自訂分類
 const deleteCustomCategory = async (catName) => {
   if (catName === '未分類' || catName === '全部收藏') return
 
-  const confirmDelete = confirm(`確定要刪除分類「${catName}」嗎？\n\n注意：此分類下的所有連結將會被移至「未分類」。`)
+  const confirmDelete = confirm(`確定要刪除標籤「${catName}」嗎？\n\n注意：此標籤下的連結將會被移至「未分類」。`)
   if (!confirmDelete) return
 
   if (!isDevUser.value) {
@@ -638,7 +633,7 @@ const deleteCustomCategory = async (catName) => {
       .eq('user_id', props.user.id)
 
     if (error) {
-      alert('刪除分類失敗：' + error.message)
+      alert('刪除標籤失敗：' + error.message)
       return
     }
 
@@ -654,16 +649,15 @@ const deleteCustomCategory = async (catName) => {
   if (activeCollection.value === catName) {
     activeCollection.value = '全部收藏'
   }
-  showToast(`已刪除分類「${catName}」`)
+  showToast(`已刪除標籤「${catName}」`)
 }
 
-// 複製當前 Session Token（供從正式站貼回本機同步）
 const copySessionToken = async () => {
   try {
     const { data: { session } } = await supabase.auth.getSession()
     if (session) {
       await navigator.clipboard.writeText(JSON.stringify(session))
-      showToast('✅ 已複製登入 Token！可直接在 localhost 點「貼上 Token」登入')
+      showToast('🌸 已複製登入 Token！可直接在 localhost 點「貼上 Token」登入')
     } else {
       showToast('目前為本機預覽模式，無正式 Token', 'error')
     }
@@ -679,7 +673,6 @@ const handleLogout = async () => {
   window.location.reload()
 }
 
-// 手機側邊欄開關
 const isSidebarOpen = ref(false)
 const closeSidebar = () => { isSidebarOpen.value = false }
 const openSidebar = () => { isSidebarOpen.value = true }
@@ -698,10 +691,10 @@ const selectCollection = (col) => {
   <div class="dashboard-layout">
     <!-- 本機預覽提示頂條 -->
     <div v-if="isDevUser" class="dev-banner">
-      <span>🛠️ 目前處於「本機預覽模式 (含測試資料)」，所有修改即時反應但不會覆蓋雲端資料</span>
+      <span>🍄 目前處於「8-BIT 像素冒險預覽模式 (含測試資料)」，所有操作即時反應但不會影響雲端真實資料 ⭐</span>
     </div>
 
-    <!-- Toast 通知區域（支援復原操作） -->
+    <!-- 像素 RPG 對話框 Toast 通知區域 -->
     <div class="toast-container">
       <transition-group name="toast-anim">
         <div v-for="toast in toasts" :key="toast.id" class="toast" :class="toast.type">
@@ -716,22 +709,22 @@ const selectCollection = (col) => {
     <!-- 手機遮罩背景 -->
     <div class="sidebar-overlay" :class="{ active: isSidebarOpen }" @click="closeSidebar"></div>
 
-    <!-- Sidebar 側邊導覽列（含即時數量統計） -->
+    <!-- 側邊導覽列 (Mario 像素方塊風格) -->
     <aside class="sidebar glass-panel" :class="{ 'sidebar-open': isSidebarOpen }">
       <div class="sidebar-header">
         <div class="logo">
-          <span class="logo-icon">🔗</span>
+          <span class="logo-icon">🍄</span>
           <h2>LinkSort</h2>
         </div>
         <p class="user-greeting">
-          哈囉，{{ user.user_metadata?.display_name || user.email?.split('@')[0] || '使用者' }}
-          <span v-if="isDevUser" class="dev-tag">預覽版</span>
+          冒險者：{{ user.user_metadata?.display_name || user.email?.split('@')[0] || 'MARIO' }} ⭐
+          <span v-if="isDevUser" class="dev-tag">DEV</span>
         </p>
       </div>
 
       <div class="sidebar-nav">
         <!-- 母分類 -->
-        <h3>🏢 平台來源</h3>
+        <h3>🎮 冒險世界 (來源)</h3>
         <ul class="nav-list platform-list">
           <li v-for="plat in platforms" :key="plat" :class="{ active: activePlatform === plat }"
             @click="selectPlatform(plat)">
@@ -744,53 +737,48 @@ const selectCollection = (col) => {
         <div class="divider"></div>
 
         <!-- 子分類 -->
-        <h3>📁 我的收藏標籤</h3>
+        <h3>📦 道具箱標籤</h3>
         <ul class="nav-list collection-list">
+          <!-- 全部收藏 -->
           <li :class="{ active: activeCollection === '全部收藏' }" @click="selectCollection('全部收藏')">
-            <span class="list-text">全部收藏</span>
+            <span class="list-text">⭐ 全部收藏</span>
             <span class="nav-count">{{ categoryCounts.total }}</span>
           </li>
 
+          <!-- 未分類（待整理專區） -->
           <li :class="{ active: activeCollection === '未分類' }" @click="selectCollection('未分類')">
-            <span class="list-text">⚡ 未分類 (待整理)</span>
+            <span class="list-text">❓ 待整理收件匣</span>
             <span class="nav-count" :class="{ 'has-unread': categoryCounts.uncategorized > 0 }">
               {{ categoryCounts.uncategorized }}
             </span>
           </li>
 
+          <!-- 各使用者自訂分類 -->
           <li v-for="cat in customCategories" :key="cat" :class="{ active: activeCollection === cat }"
             class="collection-item">
-            <span class="list-text" @click="selectCollection(cat)">{{ cat }}</span>
+            <span class="list-text" @click="selectCollection(cat)">🏷️ {{ cat }}</span>
             <span class="nav-count" @click="selectCollection(cat)">{{ categoryCounts.custom[cat] || 0 }}</span>
             <div class="category-actions">
-              <button class="edit-cat-btn" @click.stop="editCustomCategory(cat)" title="編輯分類名稱">
-                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
+              <button class="edit-cat-btn" @click.stop="editCustomCategory(cat)" title="編輯標籤名稱">
+                ✏️
               </button>
-              <button class="delete-cat-btn" @click.stop="deleteCustomCategory(cat)" title="刪除分類">
-                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
+              <button class="delete-cat-btn" @click.stop="deleteCustomCategory(cat)" title="刪除標籤">
+                🗑️
               </button>
             </div>
           </li>
         </ul>
         <button class="add-category-btn" @click="createCustomCategory()">
-          + 新增子分類標籤
+          <span>+</span> 新增道具箱標籤 🍄
         </button>
       </div>
 
       <div class="sidebar-footer">
         <button v-if="!isDevUser" class="copy-token-btn" @click="copySessionToken" title="複製登入 Token">
-          📋 複製 Token (本機同步用)
+          📋 複製 Token (本機同步)
         </button>
         <button class="logout-btn" @click="handleLogout">
-          {{ isDevUser ? '結束本機預覽' : '登出' }}
+          {{ isDevUser ? '結束預覽模式' : '離開遊戲 (登出)' }}
         </button>
       </div>
     </aside>
@@ -803,7 +791,7 @@ const selectCollection = (col) => {
         <template v-if="!isBatchMode">
           <button class="hamburger-btn" @click="openSidebar" title="開啟選單">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="3" y1="12" x2="21" y2="12"></line>
               <line x1="3" y1="6" x2="21" y2="6"></line>
               <line x1="3" y1="18" x2="21" y2="18"></line>
@@ -813,18 +801,18 @@ const selectCollection = (col) => {
           <!-- 連續快速新增表單 -->
           <div class="add-link-form">
             <div class="target-category-indicator" :title="'儲存時將自動分類至：' + (activeCollection !== '全部收藏' ? activeCollection : '未分類')">
-              <span>{{ activeCollection !== '全部收藏' ? '📁 ' + activeCollection : '🏷️ 未分類' }}</span>
+              <span>{{ activeCollection !== '全部收藏' ? '📦 ' + activeCollection : '❓ 未分類' }}</span>
             </div>
             <input 
               ref="addInputRef"
               type="url" 
               v-model="newUrl" 
-              placeholder="貼上連結按 Enter 快速新增..." 
+              placeholder="貼上冒險連結，按 Enter 快速收藏 🍄..." 
               @keyup.enter="addLink(false)" 
               :disabled="isAdding"
             />
             <button class="add-btn" @click="addLink(false)" :disabled="isAdding || !newUrl.trim()">
-              {{ isAdding ? '新增中...' : '儲存' }}
+              {{ isAdding ? '抓取中...' : '⭐ 收藏' }}
             </button>
           </div>
         </template>
@@ -833,11 +821,7 @@ const selectCollection = (col) => {
         <template v-else>
           <div class="batch-left">
             <button class="cancel-batch-btn" @click="toggleBatchMode" title="離開批次管理">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
+              ✕
             </button>
             <span class="batch-count">
               已選 <strong>{{ selectedLinks.size }}</strong> 項
@@ -853,7 +837,7 @@ const selectCollection = (col) => {
               <option v-for="cat in customCategories" :key="cat" :value="cat">{{ cat }}</option>
             </select>
             <button class="confirm-batch-btn" @click="applyBatchCategory" :disabled="selectedLinks.size === 0">
-              移動
+              放入道具箱 🍄
             </button>
           </div>
         </template>
@@ -871,7 +855,7 @@ const selectCollection = (col) => {
             </h2>
           </div>
 
-          <!-- 快速切換「待整理」與「全部收藏」頁籤（讓使用者清楚掌握當前模式） -->
+          <!-- 快速切換「待整理」與「全部收藏」像素方塊頁籤 -->
           <div class="view-mode-tabs" v-if="!isBatchMode">
             <button 
               type="button" 
@@ -880,7 +864,7 @@ const selectCollection = (col) => {
               @click="selectCollection('未分類')"
               title="待整理收件匣：分類後立即移出此畫面"
             >
-              <span class="tab-icon">⚡</span>
+              <span class="tab-icon">❓</span>
               <span>待整理</span>
               <span class="tab-count" :class="{ 'has-badge': categoryCounts.uncategorized > 0 }">
                 {{ categoryCounts.uncategorized }}
@@ -893,31 +877,31 @@ const selectCollection = (col) => {
               @click="selectCollection('全部收藏')"
               title="全部收藏：查看所有整理完成與留存的連結"
             >
-              <span class="tab-icon">📁</span>
+              <span class="tab-icon">⭐</span>
               <span>全部收藏</span>
               <span class="tab-count">{{ categoryCounts.total }}</span>
             </button>
           </div>
         </div>
 
-        <!-- 待整理模式下的提示橫幅 -->
+        <!-- 待整理模式下的 Mario 像素橫幅 -->
         <div class="triage-status-banner" v-if="activeCollection === '未分類' && filteredLinks.length > 0">
-          <span class="banner-icon">🎯</span>
+          <span class="banner-icon">❓</span>
           <span class="banner-text">
-            <strong>待整理收件匣：</strong>
-            為卡片選擇分類後會<strong>立即移出此畫面</strong>，讓您順暢整理剩餘項目（整理好的連結都會完整保存在「全部收藏」中）
+            <strong>【待整理收件匣】進行中：</strong>
+            為卡片選取分類後會<strong>立即彈跳移出此畫面</strong>，讓您能連續收納下一筆！（所有卡片均安全保存在「⭐ 全部收藏」中）
           </span>
         </div>
 
         <div v-if="isLoadingInitial" class="loading-state">
-          <div class="loader-inline"></div>
-          <p>載入連結中...</p>
+          <div class="pixel-spinner"></div>
+          <p>正在讀取世界地圖與道具庫 🍄...</p>
         </div>
         <div v-else>
-          <!-- 切換類別時使用平滑 view-fade，避免卡片橫向向左滑動飛躍 -->
+          <!-- 切換類別時使用平滑 view-fade -->
           <transition name="view-fade" mode="out-in">
             <div :key="activePlatform + '_' + activeCollection">
-              <!-- 卡片格線（原地淡入/淡出，不使用橫向移動動畫） -->
+              <!-- 卡片格線（原地縮小淡出，無橫向突兀滑動） -->
               <transition-group 
                 name="card-fade" 
                 tag="div" 
@@ -939,22 +923,22 @@ const selectCollection = (col) => {
                 />
               </transition-group>
 
-              <!-- 待整理全部完成慶祝狀態 (Inbox Zero) -->
+              <!-- 待整理全部完成慶祝狀態 (Inbox Zero -> STAGE CLEAR) -->
               <div class="empty-state glass-panel empty-inbox" v-else-if="activeCollection === '未分類'">
-                <span class="empty-icon">🎉</span>
-                <h3>太棒了！所有待整理連結已全部分類完成</h3>
-                <p>未分類清單已清空，所有連結均已妥善歸類於各自標籤中！</p>
+                <span class="empty-icon">🏁</span>
+                <h3>⭐ STAGE CLEAR! 關卡全破！ ⭐</h3>
+                <p>目前「待整理收件匣」已經全部分類完畢，所有道具與超連結均整齊歸位！🍄</p>
                 <button class="empty-action-btn" @click="selectCollection('全部收藏')">
-                  查看全部收藏 ({{ categoryCounts.total }})
+                  ⭐ 查看全部收藏 ({{ categoryCounts.total }})
                 </button>
               </div>
 
               <!-- 一般條件無資料狀態 -->
               <div class="empty-state glass-panel" v-else>
-                <span class="empty-icon">📂</span>
-                <p>「{{ activePlatform }} / {{ activeCollection }}」目前沒有任何連結喔！</p>
+                <span class="empty-icon">🧱</span>
+                <p>「{{ activePlatform }} / {{ activeCollection }}」目前沒有任何道具卡片！</p>
                 <button class="empty-action-btn" @click="selectCollection('全部收藏')">
-                  返回全部收藏
+                  返回全部收藏 ⭐
                 </button>
               </div>
             </div>
@@ -963,15 +947,11 @@ const selectCollection = (col) => {
       </div>
     </main>
 
-    <!-- 浮動批次管理按鈕 -->
+    <!-- 浮動批次管理按鈕 (Mario 無敵星星像素方塊) -->
     <button class="floating-batch-btn" :class="{ 'active-mode': isBatchMode }" @click="toggleBatchMode"
-      :title="isBatchMode ? '取消批次管理' : '開啟批次管理'">
-      <svg v-if="!isBatchMode" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="9 11 12 14 22 4"></polyline>
-        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-      </svg>
-      <span v-else class="cancel-text">取消</span>
+      :title="isBatchMode ? '完成管理' : '批次管理'">
+      <span v-if="!isBatchMode" class="btn-bubble-icon">⭐</span>
+      <span v-else class="cancel-text">完成</span>
     </button>
   </div>
 </template>
@@ -991,13 +971,14 @@ const selectCollection = (col) => {
   top: 0;
   left: 0;
   right: 0;
-  background: linear-gradient(90deg, #6366f1, #a855f7);
+  background: var(--mario-brick);
   color: #fff;
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-size: 0.82rem;
+  font-weight: 800;
   text-align: center;
-  padding: 0.3rem 1rem;
+  padding: 0.35rem 1rem;
   z-index: 1000;
+  border-bottom: 2px solid #000000;
 }
 
 /* === 側邊欄遮罩（手機用）=== */
@@ -1005,73 +986,80 @@ const selectCollection = (col) => {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.6);
   z-index: 200;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
 }
 
-/* === 側邊欄 === */
+/* === 側邊欄 (Mario 像素控制板 - 暗色版) === */
 .sidebar {
-  width: 270px;
+  width: 275px;
   height: calc(100vh - 2rem);
   margin: 1rem;
-  border-radius: 20px;
+  border-radius: 4px;
   display: flex;
   flex-direction: column;
-  padding: 1.5rem;
+  padding: 1.3rem;
   flex-shrink: 0;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  background: #202533;
+  border: 3px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
+  transition: transform 0.25s steps(6);
 }
 
 .sidebar-header {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.1rem;
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.4rem;
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
 }
 
 .logo-icon {
-  background: linear-gradient(135deg, var(--accent-glow), var(--accent-hover));
+  background: var(--mario-red);
+  color: #fff;
   width: 38px;
   height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  font-size: 1.25rem;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  border-radius: 4px;
+  font-size: 1.3rem;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
 }
 
 .logo h2 {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   margin: 0;
-  letter-spacing: -0.5px;
+  color: var(--mario-red);
+  font-weight: 900;
+  text-shadow: 1px 1px 0px var(--mario-yellow), 2px 2px 0px #000000;
+  letter-spacing: 1px;
 }
 
 .user-greeting {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--text-secondary);
-  opacity: 0.8;
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  font-weight: 700;
 }
 
 .dev-tag {
-  background: rgba(99, 102, 241, 0.2);
-  border: 1px solid rgba(99, 102, 241, 0.4);
-  color: #a5b4fc;
-  font-size: 0.7rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  background: var(--mario-yellow);
+  border: 1px solid #000000;
+  color: #000000;
+  font-size: 0.68rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 2px;
+  font-weight: 900;
 }
 
 /* === 側邊欄導覽 === */
@@ -1079,64 +1067,68 @@ const selectCollection = (col) => {
   flex-grow: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 0.5rem;
+  padding-right: 0.35rem;
 }
 
 .sidebar-nav::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 .sidebar-nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  background: #000000;
+  border-radius: 0;
 }
 
 .sidebar-nav h3 {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-secondary);
-  margin-bottom: 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  color: #fcd116;
+  margin-bottom: 0.65rem;
   margin-top: 0.5rem;
-  opacity: 0.75;
   letter-spacing: 0.5px;
-  text-transform: uppercase;
 }
 
 .divider {
-  height: 1px;
-  background: var(--panel-border);
-  margin: 1.2rem 0;
+  height: 3px;
+  background: #000000;
+  margin: 1rem 0;
 }
 
 .nav-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.35rem;
 }
 
 .nav-list li {
-  padding: 0.55rem 0.85rem;
-  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 3px;
   cursor: pointer;
-  transition: all 0.2s;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  transition: transform 0.08s ease, background 0.08s ease;
+  color: #cbd5e1;
+  font-size: 0.88rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-height: 42px;
+  min-height: 38px;
+  font-weight: 700;
+  border: 2px solid transparent;
 }
 
 .nav-list li:hover {
-  background: var(--panel-border);
-  color: var(--text-primary);
+  background: #2d3448;
+  color: var(--mario-yellow);
+  border-color: #000000;
+  transform: translate(2px, 0);
 }
 
 .nav-list li.active {
-  background: var(--accent-glow);
-  color: white;
-  font-weight: 600;
+  background: var(--mario-red);
+  color: #ffffff;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  transform: translate(2px, 0);
 }
 
 .collection-item {
@@ -1152,99 +1144,93 @@ const selectCollection = (col) => {
   white-space: nowrap;
 }
 
-/* 數量統計標籤 */
+/* 數量統計像素標籤 */
 .nav-count {
-  font-size: 0.75rem;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 0.15rem 0.5rem;
-  border-radius: 99px;
-  color: var(--text-secondary);
-  font-weight: 500;
+  font-size: 0.74rem;
+  background: #161922;
+  padding: 0.1rem 0.45rem;
+  border-radius: 2px;
+  color: #cbd5e1;
+  font-weight: 900;
   margin-left: auto;
-  transition: all 0.2s;
+  border: 1px solid #000000;
 }
 
 .nav-list li.active .nav-count {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  background: var(--mario-yellow);
+  color: #000000;
 }
 
 .nav-count.has-unread {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  font-weight: 600;
+  background: var(--mario-yellow);
+  color: #000000;
+  border: 1px solid #000000;
+  animation: coinBlink 1.2s infinite ease-in-out;
+}
+
+@keyframes coinBlink {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 
 .category-actions {
   display: flex;
-  gap: 2px;
+  gap: 3px;
   margin-left: 0.3rem;
 }
 
 .edit-cat-btn,
 .delete-cat-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  opacity: 0.35;
+  background: #161922;
+  border: 1px solid #000000;
+  font-size: 0.75rem;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
-  transition: all 0.2s;
+  padding: 2px;
+  border-radius: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  min-height: 28px;
+  min-width: 22px;
+  min-height: 22px;
   flex-shrink: 0;
-}
-
-.collection-item:hover .edit-cat-btn,
-.collection-item:hover .delete-cat-btn {
-  opacity: 0.75;
+  transition: transform 0.08s ease;
+  color: #cbd5e1;
 }
 
 .edit-cat-btn:hover,
-.edit-cat-btn:active {
-  opacity: 1 !important;
-  color: var(--accent-color);
-  background: rgba(99, 102, 241, 0.15);
-}
-
-.delete-cat-btn:hover,
-.delete-cat-btn:active {
-  opacity: 1 !important;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.15);
+.delete-cat-btn:hover {
+  background: var(--mario-yellow);
+  color: #000;
+  transform: scale(1.15);
 }
 
 .color-dot {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: 1px;
   display: inline-block;
   flex-shrink: 0;
-  opacity: 0.9;
+  border: 1.5px solid #000000;
 }
 
 .add-category-btn {
   width: 100%;
-  padding: 0.65rem;
+  padding: 0.6rem;
   margin-top: 0.85rem;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  color: var(--text-secondary);
-  border-radius: 10px;
-  font-size: 0.85rem;
-  transition: all 0.2s;
-  min-height: 42px;
+  background: #161922;
+  border: 2px dashed #475569;
+  color: var(--mario-yellow);
+  border-radius: 3px;
+  font-size: 0.84rem;
+  font-weight: 900;
+  transition: all 0.1s;
+  min-height: 38px;
 }
 
 .add-category-btn:hover {
-  border-color: var(--accent-color);
-  color: var(--accent-color);
-  background: rgba(99, 102, 241, 0.08);
+  background: #272d3e;
+  border-color: #000000;
+  border-style: solid;
 }
 
 .sidebar-footer {
@@ -1256,35 +1242,37 @@ const selectCollection = (col) => {
 
 .copy-token-btn {
   width: 100%;
-  padding: 0.65rem;
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  color: #a5b4fc;
-  border-radius: 10px;
-  font-size: 0.82rem;
-  font-weight: 500;
-  transition: all 0.2s;
+  padding: 0.55rem;
+  background: #161922;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  color: #cbd5e1;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .copy-token-btn:hover {
-  background: rgba(99, 102, 241, 0.25);
-  color: #fff;
+  background: #272d3e;
+  color: var(--mario-yellow);
 }
 
 .logout-btn {
   width: 100%;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-secondary);
-  border-radius: 10px;
-  font-weight: 500;
-  font-size: 0.9rem;
-  min-height: 42px;
+  padding: 0.65rem;
+  background: #2a1619;
+  color: #f87171;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  border-radius: 3px;
+  font-weight: 900;
+  font-size: 0.85rem;
+  min-height: 38px;
 }
 
 .logout-btn:hover {
-  background: rgba(244, 63, 94, 0.18);
-  color: #f43f5e;
+  background: var(--mario-red);
+  color: #ffffff;
 }
 
 /* === 主畫面 === */
@@ -1299,51 +1287,58 @@ const selectCollection = (col) => {
 }
 
 .main-header {
-  padding: 0.75rem 1.25rem;
-  border-radius: 16px;
+  padding: 0.7rem 1.1rem;
+  border-radius: 4px;
   margin-bottom: 1rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   flex-shrink: 0;
+  background: #202533;
+  border: 3px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
 }
 
 .hamburger-btn {
   display: none;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--panel-border);
-  color: var(--text-primary);
-  border-radius: 8px;
-  padding: 0.6rem;
-  min-width: 42px;
-  min-height: 44px;
+  background: #161922;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  color: #cbd5e1;
+  border-radius: 3px;
+  padding: 0.5rem;
+  min-width: 38px;
+  min-height: 38px;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
 .hamburger-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: #272d3e;
+  color: var(--mario-yellow);
 }
 
 /* 連續新增表單 */
 .add-link-form {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
   flex-grow: 1;
 }
 
 .target-category-indicator {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
+  background: var(--mario-yellow);
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  border-radius: 3px;
   padding: 0 0.75rem;
-  height: 44px;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+  height: 40px;
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: #000000;
   white-space: nowrap;
   user-select: none;
   flex-shrink: 0;
@@ -1351,31 +1346,47 @@ const selectCollection = (col) => {
 
 .add-link-form input {
   flex-grow: 1;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--panel-border);
-  font-size: 0.95rem;
   min-width: 0;
-  height: 44px;
+  height: 40px;
+  font-size: 0.92rem;
+  border: 2px solid #000000;
+  border-radius: 3px;
+  background: #161922;
+  color: #f1f5f9;
+  padding: 0 0.75rem;
+  font-family: inherit;
+  font-weight: 700;
 }
 
 .add-link-form input:focus {
-  background: rgba(0, 0, 0, 0.45);
+  outline: none;
+  border-color: var(--mario-red);
+  box-shadow: 2px 2px 0px var(--mario-red);
+  background: #1a1e2a;
 }
 
 .add-btn {
-  background: var(--accent-color);
-  color: white;
+  background: var(--mario-red);
+  color: #ffffff;
   padding: 0 1.25rem;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: 3px;
+  font-weight: 900;
   white-space: nowrap;
   flex-shrink: 0;
-  height: 44px;
+  height: 40px;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
 }
 
 .add-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
+  background: #c41e1a;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px #000000;
+}
+
+.add-btn:active:not(:disabled) {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px #000000 !important;
 }
 
 .add-btn:disabled {
@@ -1392,51 +1403,55 @@ const selectCollection = (col) => {
 }
 
 .cancel-batch-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--panel-border);
-  color: var(--text-primary);
-  border-radius: 8px;
-  width: 38px;
-  height: 38px;
+  background: #161922;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  color: #f87171;
+  border-radius: 3px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 900;
   cursor: pointer;
-  transition: background 0.2s;
   flex-shrink: 0;
 }
 
 .cancel-batch-btn:hover {
-  background: rgba(244, 63, 94, 0.2);
-  color: #f43f5e;
+  background: var(--mario-red);
+  color: #fff;
 }
 
 .batch-count {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
+  font-size: 0.88rem;
+  color: #cbd5e1;
   white-space: nowrap;
+  font-weight: 700;
 }
 
 .batch-count strong {
-  color: var(--text-primary);
-  font-size: 1rem;
+  color: var(--mario-yellow);
+  font-size: 1.05rem;
 }
 
 .select-all-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--panel-border);
-  color: var(--text-primary);
+  background: #161922;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  color: #cbd5e1;
   font-size: 0.8rem;
-  padding: 0.35rem 0.65rem;
-  border-radius: 6px;
+  font-weight: 800;
+  padding: 0.3rem 0.65rem;
+  border-radius: 3px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
 }
 
 .select-all-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: #272d3e;
+  color: var(--mario-yellow);
 }
 
 .batch-right {
@@ -1449,42 +1464,36 @@ const selectCollection = (col) => {
 }
 
 .batch-select-inline {
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid var(--panel-border);
-  color: white;
-  padding: 0 0.6rem;
-  border-radius: 8px;
+  background: #161922;
+  border: 2px solid #000000;
+  color: #f1f5f9;
+  padding: 0 0.7rem;
+  border-radius: 3px;
   outline: none;
   font-family: inherit;
-  font-size: 0.9rem;
-  height: 38px;
+  font-size: 0.88rem;
+  height: 36px;
   flex: 1;
   min-width: 0;
-  max-width: 200px;
+  max-width: 180px;
   cursor: pointer;
-}
-
-.batch-select-inline:focus {
-  border-color: var(--accent-color);
-}
-
-.batch-select-inline option {
-  background: var(--bg-gradient-end);
-  color: white;
+  font-weight: 700;
 }
 
 .confirm-batch-btn {
-  background: var(--accent-color);
+  background: var(--mario-green);
   color: white;
-  padding: 0.45rem 1.15rem;
-  border-radius: 8px;
-  font-weight: 500;
+  padding: 0.4rem 1.1rem;
+  border-radius: 3px;
+  font-weight: 900;
   white-space: nowrap;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
 }
 
 .confirm-batch-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: #008f00;
 }
 
 .confirm-batch-btn:disabled {
@@ -1504,144 +1513,132 @@ const selectCollection = (col) => {
 }
 
 .links-container::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .links-container::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  background: #000000;
+  border-radius: 0;
 }
 
 .section-title-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.1rem;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
   gap: 0.75rem;
 }
 
-/* 主要模式切換頁籤 */
+/* 主要模式切換 Mario 像素方塊頁籤 (暗色) */
 .view-mode-tabs {
   display: flex;
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid var(--panel-border);
-  border-radius: 12px;
+  background: #161922;
+  border: 3px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  border-radius: 4px;
   padding: 3px;
-  gap: 3px;
+  gap: 4px;
 }
 
 .mode-tab-btn {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.45rem 0.85rem;
-  border-radius: 9px;
+  padding: 0.45rem 0.95rem;
+  border-radius: 3px;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: all 0.2s;
-  border: none;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  font-weight: 800;
+  border: 2px solid transparent;
   cursor: pointer;
+  transition: all 0.08s ease;
 }
 
 .mode-tab-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
+  background: #272d3e;
+  color: var(--mario-yellow);
+  border-color: #000000;
 }
 
 .mode-tab-btn.active {
-  background: var(--accent-color);
-  color: #fff;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+  background: var(--mario-red);
+  color: #ffffff;
+  font-weight: 900;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
 }
 
 .tab-count {
   font-size: 0.72rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  padding: 0.08rem 0.4rem;
+  border-radius: 2px;
+  background: #202533;
+  color: #cbd5e1;
+  border: 1px solid #000000;
+  font-weight: 900;
 }
 
 .tab-count.has-badge {
-  background: #f59e0b;
-  color: #000;
+  background: var(--mario-yellow);
+  color: #000000;
+}
+
+.mode-tab-btn.active .tab-count {
+  background: var(--mario-yellow);
+  color: #000000;
+}
+
+/* 待整理提示 Mario 磚塊問號黃色橫幅 (舒適暗底發光感) */
+.triage-status-banner {
+  background: #28210c;
+  border: 3px solid var(--mario-yellow);
+  box-shadow: 4px 4px 0px #000000;
+  border-radius: 4px;
+  padding: 0.75rem 1.15rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #fef08a;
+  font-size: 0.88rem;
+  line-height: 1.5;
   font-weight: 700;
 }
 
-.mode-tab-btn.active .tab-count.has-badge {
-  background: #fff;
-  color: var(--accent-color);
-}
-
-/* 待整理提示橫幅 */
-.triage-status-banner {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  border-radius: 12px;
-  padding: 0.65rem 1rem;
-  margin-bottom: 1.1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  color: #fbbf24;
-  font-size: 0.86rem;
-  line-height: 1.4;
-}
-
 .banner-icon {
-  font-size: 1.15rem;
+  font-size: 1.4rem;
   flex-shrink: 0;
 }
 
-.banner-text strong {
-  color: #fff;
-}
-
 .section-title {
-  font-weight: 600;
-  letter-spacing: -0.5px;
+  font-weight: 900;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   margin: 0;
 }
 
 .title-platform {
-  color: var(--text-primary);
+  color: #f1f5f9;
 }
 
 .title-separator {
-  color: var(--text-secondary);
-  opacity: 0.5;
+  color: var(--mario-red);
 }
 
 .title-collection {
-  color: var(--accent-color);
-  background: rgba(99, 102, 241, 0.12);
-  padding: 0.2rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.95em;
-}
-
-.item-total-tag {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 0.15rem 0.5rem;
-  border-radius: 99px;
-  font-weight: 400;
-}
-
-.batch-title-hint {
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-  font-weight: normal;
+  color: var(--mario-yellow);
+  background: #161922;
+  padding: 0.2rem 0.65rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-weight: 900;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
 }
 
 .links-grid {
@@ -1651,7 +1648,7 @@ const selectCollection = (col) => {
   padding-bottom: 1rem;
 }
 
-/* === 切換類別平滑淡入淡出（徹底消除橫向向左飄移動畫）=== */
+/* === 切換類別平滑淡入淡出（無橫向異常位移）=== */
 .view-fade-enter-active,
 .view-fade-leave-active {
   transition: opacity 0.16s ease;
@@ -1663,10 +1660,10 @@ const selectCollection = (col) => {
 
 /* 單張卡片整理移出時原地縮小淡出 */
 .card-fade-enter-active {
-  transition: opacity 0.22s ease, transform 0.22s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .card-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 .card-fade-enter-from {
   opacity: 0;
@@ -1677,49 +1674,57 @@ const selectCollection = (col) => {
   transform: scale(0.92);
 }
 
-/* 狀態區塊 */
+/* 狀態區塊 (Mario 關卡像素狀態) */
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 280px;
-  border-radius: 16px;
+  border-radius: 4px;
   gap: 0.75rem;
   text-align: center;
-  padding: 2rem;
+  padding: 2.5rem;
+  background: #202533;
+  border: 3px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
 }
 
 .empty-icon {
-  font-size: 3rem;
+  font-size: 3.5rem;
 }
 
 .empty-inbox h3 {
-  color: var(--text-primary);
-  font-size: 1.2rem;
+  color: var(--mario-yellow);
+  font-size: 1.35rem;
+  font-weight: 900;
   margin: 0;
 }
 
 .empty-inbox p {
   color: var(--text-secondary);
-  max-width: 420px;
+  max-width: 440px;
   font-size: 0.95rem;
-  line-height: 1.5;
+  line-height: 1.6;
+  font-weight: 700;
 }
 
 .empty-action-btn {
-  margin-top: 0.75rem;
-  background: var(--accent-color);
+  margin-top: 0.85rem;
+  background: var(--mario-red);
   color: #fff;
-  padding: 0.55rem 1.25rem;
-  border-radius: 10px;
-  font-weight: 500;
-  font-size: 0.9rem;
+  padding: 0.65rem 1.45rem;
+  border-radius: 3px;
+  font-weight: 900;
+  font-size: 0.92rem;
+  border: 3px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
 }
 
 .empty-action-btn:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
+  background: #c41e1a;
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px #000000;
 }
 
 .loading-state {
@@ -1729,59 +1734,66 @@ const selectCollection = (col) => {
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  color: var(--text-secondary);
+  color: #f1f5f9;
+  font-weight: 800;
 }
 
-.loader-inline {
-  width: 32px;
-  height: 32px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  border-top-color: var(--accent-color);
-  animation: spin 0.8s linear infinite;
+.pixel-spinner {
+  width: 36px;
+  height: 36px;
+  background: var(--mario-yellow);
+  border: 3px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  animation: pixelSpin 0.8s steps(4) infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes pixelSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-/* 浮動批次按鈕 */
+/* 浮動批次按鈕 (Mario 無敵星星金色方塊) */
 .floating-batch-btn {
   position: fixed;
   right: 24px;
   bottom: 24px;
-  width: 54px;
-  height: 54px;
-  border-radius: 27px;
-  background: var(--accent-color);
-  color: white;
-  border: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  background: var(--mario-yellow);
+  color: #000000;
+  border: 3px solid #000000;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  box-shadow: 5px 5px 0px #000000;
   z-index: 500;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.btn-bubble-icon {
+  font-size: 1.6rem;
 }
 
 .floating-batch-btn:hover {
-  transform: scale(1.06);
-  box-shadow: 0 6px 22px rgba(99, 102, 241, 0.4);
+  background: #ffe04d;
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0px #000000;
 }
 
 .floating-batch-btn.active-mode {
-  background: #ef4444;
-  width: 86px;
-  border-radius: 16px;
+  background: var(--mario-red);
+  color: #ffffff;
+  width: 88px;
 }
 
 .cancel-text {
-  font-weight: 600;
+  font-weight: 900;
   font-size: 0.95rem;
 }
 
-/* === Toast 通知（含復原按鈕）=== */
+/* === Toast 通知（Mario 對話方塊）=== */
 .toast-container {
   position: fixed;
   bottom: 1.5rem;
@@ -1796,71 +1808,58 @@ const selectCollection = (col) => {
 }
 
 .toast {
-  background: rgba(22, 27, 46, 0.96);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: #202533;
+  border: 3px solid #000000;
+  color: #f1f5f9;
   padding: 0.65rem 1.15rem;
-  border-radius: 40px;
-  font-size: 0.9rem;
-  font-weight: 500;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  font-weight: 800;
   white-space: nowrap;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  box-shadow: 5px 5px 0px #000000;
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.75rem;
   pointer-events: auto;
 }
 
 .toast.error {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(80, 20, 20, 0.95);
+  border-color: #000000;
+  background: #2a1619;
+  color: #f87171;
 }
 
 .toast-action-btn {
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: var(--mario-green);
   color: #fff;
-  font-weight: 600;
+  font-weight: 900;
   font-size: 0.8rem;
   padding: 0.2rem 0.65rem;
-  border-radius: 99px;
+  border-radius: 3px;
   cursor: pointer;
-  transition: all 0.15s;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
 }
 
 .toast-action-btn:hover {
-  background: #fff;
-  color: #0f172a;
+  background: #008f00;
 }
 
 .toast-anim-enter-active {
-  animation: toast-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: toast-in 0.15s ease-out;
 }
 .toast-anim-leave-active {
-  animation: toast-out 0.2s ease forwards;
+  animation: toast-out 0.15s ease-in forwards;
 }
 
 @keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(14px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes toast-out {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(8px) scale(0.95);
-  }
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(8px) scale(0.95); }
 }
 
 /* ============================================
@@ -1881,10 +1880,10 @@ const selectCollection = (col) => {
     top: 0;
     height: 100vh;
     margin: 0;
-    border-radius: 0 20px 20px 0;
+    border-radius: 0 4px 4px 0;
     z-index: 300;
     transform: translateX(-110%);
-    width: 280px;
+    width: 285px;
   }
 
   .sidebar.sidebar-open {
@@ -1899,7 +1898,7 @@ const selectCollection = (col) => {
   .main-header {
     margin-bottom: 0.85rem;
     padding: 0.65rem 0.75rem;
-    border-radius: 12px;
+    border-radius: 4px;
     gap: 0.5rem;
   }
 
@@ -1912,12 +1911,12 @@ const selectCollection = (col) => {
   }
 
   .add-link-form input {
-    font-size: 0.88rem;
+    font-size: 0.85rem;
   }
 
   .add-btn {
     padding: 0 0.85rem;
-    font-size: 0.88rem;
+    font-size: 0.85rem;
   }
 
   .links-grid {
@@ -1926,7 +1925,7 @@ const selectCollection = (col) => {
   }
 
   .section-title {
-    font-size: 1rem;
+    font-size: 1.05rem;
   }
 
   .floating-batch-btn {

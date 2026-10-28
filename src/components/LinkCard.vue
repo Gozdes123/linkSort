@@ -46,20 +46,21 @@ onUnmounted(() => {
   document.removeEventListener('click', handleDocumentClick)
 })
 
+// 馬力歐像素經典配色
 const siteColors = {
   Threads: '#000000',
-  Instagram: '#e1306c',
-  Dcard: '#006aa6',
-  YouTube: '#ff0000',
-  X: '#1da1f2',
-  '其他來源': '#475569'
+  Instagram: '#e52521',
+  Dcard: '#0088cc',
+  YouTube: '#e52521',
+  X: '#0066cc',
+  '其他來源': '#9933cc'
 }
 
-const badgeColor = computed(() => siteColors[props.link.category] || '#475569')
+const badgeColor = computed(() => siteColors[props.link.category] || '#9933cc')
 
 const displayDate = computed(() => {
   const date = new Date(props.link.created_at)
-  return date.toLocaleDateString('zh-TW', { year: 'numeric', month: 'short', day: 'numeric' })
+  return date.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
 })
 
 const copyLink = async () => {
@@ -77,16 +78,14 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 <template>
   <div class="link-card glass-panel" :class="{ 'is-selectable': selectable, 'is-selected': selected }"
     @click="selectable && emit('toggleSelect', link.id)">
-    <!-- 選取時的明顯勾選標記 -->
+    <!-- 像素選取打勾標記 -->
     <div v-if="selectable && selected" class="selected-overlay">
-      <div class="checkmark-circle">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
+      <div class="checkmark-box">
+        ✓
       </div>
     </div>
 
+    <!-- 縮圖區域 -->
     <div class="thumbnail-wrapper" v-if="link.thumbnail_url">
       <img :src="link.thumbnail_url" :alt="link.title" class="thumbnail" loading="lazy"
         @error="$event.target.style.display = 'none'" />
@@ -107,17 +106,17 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
               class="category-badge custom-badge-btn" 
               :class="{ 'is-uncategorized': isUncategorized, 'is-open': isCategoryMenuOpen }"
               @click="toggleCategoryMenu"
-              :title="isUncategorized ? '點擊加入分類' : '點擊切換分類'"
+              :title="isUncategorized ? '點擊加入分類' : '點擊更換分類'"
             >
-              <span class="badge-icon">{{ isUncategorized ? '🏷️' : '📁' }}</span>
+              <span class="badge-icon">{{ isUncategorized ? '❓' : '🍄' }}</span>
               <span class="badge-text">{{ isUncategorized ? '未分類' : link.custom_category }}</span>
-              <span class="badge-arrow">▾</span>
+              <span class="badge-arrow">▼</span>
             </button>
 
-            <!-- 彈出選單 -->
+            <!-- 像素對話框彈出選單 (RPG 對話框風格) -->
             <transition name="popover-anim">
-              <div v-if="isCategoryMenuOpen" class="category-popover glass-panel">
-                <div class="popover-title">快速指派分類</div>
+              <div v-if="isCategoryMenuOpen" class="category-popover">
+                <div class="popover-title">▶ 選擇目標分類</div>
                 <div class="popover-list">
                   <button 
                     type="button" 
@@ -125,9 +124,9 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
                     :class="{ 'is-active': isUncategorized }"
                     @click="selectCategory('未分類')"
                   >
-                    <span class="popover-icon">📂</span>
+                    <span class="popover-icon">❓</span>
                     <span class="popover-name">未分類</span>
-                    <span v-if="isUncategorized" class="popover-check">✓</span>
+                    <span v-if="isUncategorized" class="popover-check">★</span>
                   </button>
 
                   <button 
@@ -138,16 +137,16 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
                     :class="{ 'is-active': link.custom_category === cat }"
                     @click="selectCategory(cat)"
                   >
-                    <span class="popover-icon">📁</span>
+                    <span class="popover-icon">🍄</span>
                     <span class="popover-name">{{ cat }}</span>
-                    <span v-if="link.custom_category === cat" class="popover-check">✓</span>
+                    <span v-if="link.custom_category === cat" class="popover-check">★</span>
                   </button>
                 </div>
 
                 <div class="popover-divider"></div>
 
                 <button type="button" class="popover-add-btn" @click="handleCreateCategory">
-                  <span>+</span> 新增自訂分類...
+                  <span>+</span> 新增標籤...
                 </button>
               </div>
             </transition>
@@ -158,11 +157,13 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 
       <div class="card-body">
         <h3 class="title" :class="{ 'is-loading': isLoadingTitle }">
-          <span v-if="isLoadingTitle" class="loading-shimmer">⏳ 正在抓取資訊...</span>
+          <span v-if="isLoadingTitle" class="loading-shimmer">⌛ 抓取關卡資訊中...</span>
           <span v-else>{{ link.title }}</span>
         </h3>
         <p class="description" v-if="link.description && !isLoadingTitle">{{ link.description }}</p>
-        <a :href="link.url" target="_blank" class="url" @click="selectable && $event.preventDefault()">{{ link.url }}</a>
+        <a :href="link.url" target="_blank" class="url" @click="selectable && $event.preventDefault()">
+          🔗 {{ link.url }}
+        </a>
       </div>
 
       <div class="card-footer">
@@ -174,32 +175,18 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
             @click.stop="toggleCategoryMenu"
             :title="isUncategorized ? '點擊加入分類' : '點擊更改分類'"
           >
-            <span>{{ isUncategorized ? '⚡ 待分類' : '📁 ' + link.custom_category }}</span>
+            <span>{{ isUncategorized ? '❓ 待分類' : '🍄 ' + link.custom_category }}</span>
           </button>
         </div>
         <div class="footer-right">
           <button class="action-btn edit-btn" title="編輯標題" @click.stop="emit('edit', link.id, link.title)">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
+            ✏️
           </button>
-          <button class="action-btn copy-btn" title="複製連結" @click.stop="copyLink">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
+          <button class="action-btn copy-btn" title="複製網址" @click.stop="copyLink">
+            📋
           </button>
-          <button class="action-btn delete-btn" title="刪除" @click.stop="emit('delete', link.id)">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              <line x1="10" y1="11" x2="10" y2="17"></line>
-              <line x1="14" y1="11" x2="14" y2="17"></line>
-            </svg>
+          <button class="action-btn delete-btn" title="刪除項目" @click.stop="emit('delete', link.id)">
+            💣
           </button>
         </div>
       </div>
@@ -211,32 +198,32 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 .link-card {
   display: flex;
   flex-direction: column;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s, border-color 0.2s, opacity 0.25s;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
   position: relative;
-  overflow: visible; /* 允許分類 popover 超出卡片邊界 */
+  overflow: visible;
   padding: 0;
-  border-radius: 16px;
+  border-radius: 4px;
+  background: #202533;
+  border: 3px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
 }
 
-/* 頂部色條 */
+/* 頂部像素色條 */
 .link-card:not(.has-thumbnail):before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  height: 4px;
+  height: 6px;
   background: v-bind(badgeColor);
-  opacity: 0.8;
   z-index: 2;
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
+  border-bottom: 2px solid #000000;
 }
 
 .link-card:hover:not(.is-selectable) {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
-  border-color: rgba(255, 255, 255, 0.14);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #000000;
 }
 
 .is-selectable {
@@ -245,65 +232,51 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 }
 
 .is-selectable:hover {
-  border-color: rgba(99, 102, 241, 0.4);
-  background: rgba(255, 255, 255, 0.04);
+  background: #272d3e;
 }
 
 .is-selected {
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px var(--accent-glow), 0 8px 30px rgba(99, 102, 241, 0.25);
-  background: rgba(99, 102, 241, 0.12);
-  transform: scale(0.98);
+  border-color: #000000;
+  background: #262920;
+  box-shadow: 4px 4px 0px #fcd116;
 }
 
-/* 勾選標記覆蓋層 */
+/* 像素選取標記 */
 .selected-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(252, 209, 22, 0.15);
   z-index: 10;
   pointer-events: none;
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  padding: 0.75rem;
-  border-radius: inherit;
+  padding: 0.65rem;
 }
 
-.checkmark-circle {
-  width: 34px;
-  height: 34px;
-  background: var(--accent-color);
-  border-radius: 50%;
+.checkmark-box {
+  width: 28px;
+  height: 28px;
+  background: #00a800;
+  border: 2px solid #000000;
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  box-shadow: 0 3px 12px rgba(99, 102, 241, 0.6);
-  animation: pop-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-@keyframes pop-in {
-  from {
-    transform: scale(0);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
+  font-weight: 900;
+  font-size: 1.1rem;
+  box-shadow: 2px 2px 0px #000000;
 }
 
 /* 縮圖區域 */
 .thumbnail-wrapper {
   width: 100%;
-  height: 180px;
+  height: 165px;
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
-  background: rgba(0, 0, 0, 0.2);
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
+  background: #141720;
+  border-bottom: 3px solid #000000;
 }
 
 .thumbnail {
@@ -311,18 +284,13 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.3s ease;
-}
-
-.link-card:hover .thumbnail {
-  transform: scale(1.03);
 }
 
 .card-content {
   display: flex;
   flex-direction: column;
-  padding: 1.15rem;
-  gap: 0.75rem;
+  padding: 1rem;
+  gap: 0.65rem;
   flex-grow: 1;
 }
 
@@ -340,80 +308,64 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
   gap: 0.45rem;
 }
 
+/* 像素標籤徽章 */
 .category-badge {
   font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.25rem 0.65rem;
-  border-radius: 99px;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 2px;
   color: #fff;
-  letter-spacing: 0.3px;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   white-space: nowrap;
 }
 
-.platform-badge {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-/* 快速分類按鈕 */
 .category-picker-wrapper {
   position: relative;
   display: inline-block;
 }
 
+/* 快速分類按鈕（馬力歐問號磚塊 / 水管蘑菇風格） */
 .custom-badge-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: var(--text-primary);
+  background: #00a800;
+  color: #ffffff;
   cursor: pointer;
-  transition: all 0.2s;
-  padding: 0.25rem 0.6rem;
+  transition: transform 0.08s ease;
 }
 
-.custom-badge-btn:hover,
-.custom-badge-btn.is-open {
-  background: rgba(99, 102, 241, 0.2);
-  border-color: var(--accent-color);
-  color: #fff;
-  transform: translateY(-1px);
+.custom-badge-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #000000;
+}
+
+.custom-badge-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px #000000;
 }
 
 .custom-badge-btn.is-uncategorized {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px dashed rgba(245, 158, 11, 0.45);
-  color: #fbbf24;
-}
-
-.custom-badge-btn.is-uncategorized:hover {
-  background: rgba(245, 158, 11, 0.25);
-  border-style: solid;
-  color: #fff;
+  background: #fcd116;
+  color: #000000;
 }
 
 .badge-arrow {
-  font-size: 0.65rem;
-  opacity: 0.7;
-  transition: transform 0.2s;
+  font-size: 0.6rem;
 }
 
-.custom-badge-btn.is-open .badge-arrow {
-  transform: rotate(180deg);
-}
-
-/* 彈出選單 Popover */
+/* 像素 RPG 對話框選單 (暗色地底/酒吧風格) */
 .category-popover {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
   width: 200px;
-  max-height: 260px;
-  background: rgba(20, 26, 43, 0.96);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(99, 102, 241, 0.2);
+  max-height: 250px;
+  background: #1a1e29;
+  border: 3px solid #000000;
+  border-radius: 2px;
+  box-shadow: 5px 5px 0px #000000;
   z-index: 100;
   padding: 0.4rem;
   display: flex;
@@ -421,22 +373,20 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 }
 
 .popover-title {
-  font-size: 0.72rem;
-  color: var(--text-secondary);
-  font-weight: 600;
-  padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  color: #fcd116;
+  font-weight: 700;
+  padding: 0.3rem 0.4rem;
+  border-bottom: 2px dashed #334155;
   margin-bottom: 0.3rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .popover-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   overflow-y: auto;
-  max-height: 160px;
+  max-height: 150px;
 }
 
 .popover-list::-webkit-scrollbar {
@@ -444,35 +394,34 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 }
 
 .popover-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  background: #000000;
 }
 
 .popover-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  border-radius: 2px;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
+  color: #f1f5f9;
+  font-size: 0.82rem;
+  font-weight: 700;
   text-align: left;
   border: none;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.08s;
   width: 100%;
 }
 
 .popover-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
+  background: #272d3e;
+  color: #fcd116;
 }
 
 .popover-item.is-active {
-  background: var(--accent-glow);
-  color: #fff;
-  font-weight: 500;
+  background: #e52521;
+  color: #ffffff;
 }
 
 .popover-name {
@@ -484,133 +433,98 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 
 .popover-check {
   font-size: 0.8rem;
-  color: #fff;
-  font-weight: bold;
+  color: #fcd116;
 }
 
 .popover-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 2px;
+  background: #334155;
   margin: 0.35rem 0;
 }
 
 .popover-add-btn {
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  color: var(--accent-color);
-  padding: 0.4rem;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3rem;
+  background: #161922;
+  border: 2px solid #000000;
+  color: #fcd116;
+  padding: 0.35rem;
+  border-radius: 2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 2px 2px 0px #000000;
   cursor: pointer;
-  transition: all 0.2s;
   width: 100%;
 }
 
 .popover-add-btn:hover {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: var(--accent-color);
-  color: #fff;
+  background: #272d3e;
 }
 
-/* Popover 動畫 */
-.popover-anim-enter-active {
-  animation: popover-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
+.popover-anim-enter-active,
 .popover-anim-leave-active {
-  animation: popover-out 0.12s ease forwards;
+  transition: opacity 0.1s ease, transform 0.1s ease;
 }
 
-@keyframes popover-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+.popover-anim-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
 }
-
-@keyframes popover-out {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.96);
-  }
+.popover-anim-leave-to {
+  opacity: 0;
 }
 
 .date {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 700;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .card-body {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .title {
   font-size: 0.98rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-weight: 700;
+  color: #f8fafc;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .description {
-  font-size: 0.84rem;
-  color: var(--text-secondary);
+  font-size: 0.82rem;
+  color: #94a3b8;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .url {
-  font-size: 0.8rem;
-  color: var(--accent-color);
+  font-size: 0.78rem;
+  color: #38bdf8;
   text-decoration: none;
   word-break: break-all;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  opacity: 0.75;
-  transition: opacity 0.2s;
+  font-weight: 700;
 }
 
 .url:hover {
-  opacity: 1;
   text-decoration: underline;
 }
 
-/* 載入中的閃爍動畫 */
-@keyframes shimmer {
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
-}
-
 .loading-shimmer {
-  animation: shimmer 1.5s ease-in-out infinite;
-  color: var(--text-secondary);
-  font-weight: 400;
-  font-size: 0.88rem;
+  color: #fcd116;
+  font-weight: 700;
 }
 
 .card-footer {
@@ -619,8 +533,8 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
   align-items: center;
   gap: 0.5rem;
   margin-top: auto;
-  border-top: 1px solid var(--panel-border);
-  padding-top: 0.75rem;
+  border-top: 2px dashed #334155;
+  padding-top: 0.7rem;
 }
 
 .footer-left {
@@ -630,14 +544,15 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 }
 
 .footer-quick-tag {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--text-secondary);
+  background: #161922;
+  border: 2px solid #000000;
+  color: #f1f5f9;
   font-size: 0.76rem;
+  font-weight: 700;
   padding: 0.25rem 0.55rem;
-  border-radius: 6px;
+  border-radius: 2px;
+  box-shadow: 2px 2px 0px #000000;
   cursor: pointer;
-  transition: all 0.2s;
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -645,15 +560,15 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 }
 
 .footer-quick-tag:hover {
-  background: rgba(99, 102, 241, 0.15);
-  color: var(--accent-color);
-  border-color: rgba(99, 102, 241, 0.3);
+  background: #fcd116;
+  color: #000000;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #000000;
 }
 
 .footer-quick-tag.needs-tag {
-  color: #fbbf24;
-  border-color: rgba(245, 158, 11, 0.25);
-  background: rgba(245, 158, 11, 0.06);
+  background: #fcd116;
+  color: #000000;
 }
 
 .footer-right {
@@ -664,26 +579,29 @@ const isUncategorized = computed(() => !props.link.custom_category || props.link
 }
 
 .action-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
+  background: #161922;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  border-radius: 2px;
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
-  transition: all 0.2s;
-  border: none;
+  font-size: 0.95rem;
   cursor: pointer;
+  color: #f1f5f9;
 }
 
 .action-btn:hover {
-  background: var(--panel-border);
-  color: var(--text-primary);
+  background: #fcd116;
+  color: #000000;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #000000;
 }
 
 .delete-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: #e52521;
+  color: #ffffff;
 }
 </style>

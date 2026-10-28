@@ -7,10 +7,9 @@ import { supabase } from './lib/supabase'
 const user = ref(null)
 const isLoading = ref(true)
 let authSubscription = null
-let signedOutAt = 0  // 記錄最後一次登出的時間點
+let signedOutAt = 0
 
 onMounted(async () => {
-  // 檢查是否處於本機開發預覽模式
   const isDevPreview = sessionStorage.getItem('linksort_dev_preview') === 'true'
   if (isDevPreview) {
     user.value = {
@@ -41,18 +40,14 @@ onMounted(async () => {
       return
     }
 
-    console.log('[Auth] event:', event, '| user:', session?.user?.id ?? 'null')
-
     if (event === 'SIGNED_OUT') {
       signedOutAt = Date.now()
       user.value = null
       return
     }
 
-    // 登出後 3 秒內，忽略所有重新登入事件（防止 token 自動刷新導致意外恢復登入狀態）
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
       if (Date.now() - signedOutAt < 3000) {
-        console.log('[Auth] 剛剛登出，忽略此事件:', event)
         return
       }
     }
@@ -73,7 +68,10 @@ onUnmounted(() => {
     <Dashboard v-else :user="user" />
   </div>
   <div v-else class="loading-screen">
-    <div class="loader"></div>
+    <div class="cute-loader">
+      <div class="loader-heart">💖</div>
+      <p>正在載入可愛世界...</p>
+    </div>
   </div>
 </template>
 
@@ -89,19 +87,29 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+  background: radial-gradient(circle at 10% 20%, #ffe8ee 0%, #fff2f6 35%, #f4e8ff 70%, #e6f3ff 100%);
 }
 
-.loader {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  border-top-color: var(--accent-color);
-  animation: spin 1s ease-in-out infinite;
+.cute-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.loader-heart {
+  font-size: 2.5rem;
+  animation: pulse 0.8s ease-in-out infinite alternate;
+}
+
+.cute-loader p {
+  color: #ff6584;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+@keyframes pulse {
+  from { transform: scale(0.9); }
+  to { transform: scale(1.15); }
 }
 </style>
