@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import LinkCard from './LinkCard.vue'
 import { supabase } from '../lib/supabase'
 
@@ -10,17 +10,21 @@ const props = defineProps({
   }
 })
 
+const isDevUser = computed(() => props.user.id === 'dev-user')
+
 // 母分類 (固定的社群平台)
 const platforms = ['全部來源', 'Threads', 'Instagram', 'Dcard', 'YouTube', 'X', '其他來源']
 const activePlatform = ref('全部來源')
 
-// 子分類 (自訂我的收藏)
+// 子分類 (自訂我的收藏) - 預設優先進入「未分類」，讓待整理項目立即呈現
 const customCategories = ref([])
-const activeCollection = ref('全部收藏')
+const activeCollection = ref('未分類')
 
 const links = ref([])
 const newUrl = ref('')
 const isLoadingInitial = ref(true)
+const isAdding = ref(false)
+const addInputRef = ref(null)
 
 // 批次管理相關狀態
 const isBatchMode = ref(false)
@@ -28,18 +32,57 @@ const selectedLinks = ref(new Set())
 const batchTargetCategory = ref('未分類')
 
 // Toast 通知系統
-const toasts = ref([]) // [{ id, message, type }]
+const toasts = ref([]) // [{ id, message, type, action }]
 let toastCounter = 0
-const showToast = (message, type = 'success') => {
+const showToast = (message, type = 'success', action = null) => {
   const id = ++toastCounter
-  toasts.value.push({ id, message, type })
+  toasts.value.push({ id, message, type, action })
   setTimeout(() => {
     toasts.value = toasts.value.filter(t => t.id !== id)
-  }, 3200)
+  }, action ? 4500 : 3200)
 }
+
+// 統計各類別數量
+const categoryCounts = computed(() => {
+  const counts = {
+    total: links.value.length,
+    uncategorized: 0,
+    custom: {},
+    platforms: {
+      '全部來源': links.value.length,
+      'Threads': 0,
+      'Instagram': 0,
+      'Dcard': 0,
+      'YouTube': 0,
+      'X': 0,
+      '其他來源': 0,
+    }
+  }
+
+  const knownPlatforms = ['Threads', 'Instagram', 'Dcard', 'YouTube', 'X']
+
+  links.value.forEach(link => {
+    if (knownPlatforms.includes(link.category)) {
+      counts.platforms[link.category] = (counts.platforms[link.category] || 0) + 1
+    } else {
+      counts.platforms['其他來源'] = (counts.platforms['其他來源'] || 0) + 1
+    }
+
+    const cat = link.custom_category || '未分類'
+    if (cat === '未分類') {
+      counts.uncategorized++
+    } else {
+      counts.custom[cat] = (counts.custom[cat] || 0) + 1
+    }
+  })
+
+  return counts
+})
 
 // 從 Supabase 載入使用者的自訂分類
 const loadCustomCategories = async () => {
+  if (isDevUser.value) return
+
   const { data, error } = await supabase
     .from('custom_categories')
     .select('name')
@@ -51,56 +94,124 @@ const loadCustomCategories = async () => {
 }
 
 // 儲存新的自訂分類到 Supabase
-// (這裡不再需要全量覆蓋，而是改成單筆新增/刪除)
 const addCategoryToDB = async (name) => {
+  if (isDevUser.value) return
   await supabase.from('custom_categories').insert([
     { user_id: props.user.id, name: name }
   ])
 }
 
 const deleteCategoryFromDB = async (name) => {
+  if (isDevUser.value) return
   await supabase.from('custom_categories').delete()
     .eq('user_id', props.user.id)
     .eq('name', name)
 }
 
-const createCustomCategory = async () => {
-  const name = prompt('請輸入新分類名稱 (例如：設計靈感、工作用)：')
+const createCustomCategory = async (defaultName = '') => {
+  const name = prompt('請輸入新分類名稱 (例如：設計靈感、工作用)：', defaultName)
   if (name && name.trim() !== '') {
     const trimmed = name.trim()
     if (!customCategories.value.includes(trimmed) && trimmed !== '全部收藏' && trimmed !== '未分類') {
-      // 先加到畫面
       customCategories.value.push(trimmed)
-      // 更新到後端
       await addCategoryToDB(trimmed)
-      // 不自動跳轉到新分類，留在原地
+      showToast(`已建立新分類「${trimmed}」`)
+      return trimmed
     } else {
       alert('這個分類已經存在或名稱無法使用囉！')
     }
   }
+  return null
 }
 
-// 從 Supabase 抓取資料
+// 從 Supabase 抓取資料（本機開發模式載入高擬真測試資料）
 const fetchLinks = async () => {
   isLoadingInitial.value = true
+
+  if (isDevUser.value) {
+    customCategories.value = ['設計靈感', '實用工具', '美食餐廳', '影音收藏']
+    links.value = [
+      {
+        id: 'mock-1',
+        url: 'https://www.threads.net/@zuck/post/12345',
+        title: 'Mark Zuckerberg: Building open source AI foundation models',
+        category: 'Threads',
+        custom_category: '未分類',
+        created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+        description: 'Latest updates on open-weights foundation models and future roadmap.',
+        thumbnail_url: null,
+      },
+      {
+        id: 'mock-2',
+        url: 'https://www.instagram.com/p/C3abcde123',
+        title: '2026 台北捷運周邊超人氣甜點地圖推薦',
+        category: 'Instagram',
+        custom_category: '未分類',
+        created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+        description: '精選 10 間捷運步行 5 分鐘內抵達的法式千層與戚風蛋糕！',
+        thumbnail_url: null,
+      },
+      {
+        id: 'mock-3',
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        title: 'Vue 3 高性能動畫與響應式系統深度解析實戰',
+        category: 'YouTube',
+        custom_category: '未分類',
+        created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+        description: '帶你從源碼角度理解 TransitionGroup 與 FLIP 動畫實作細節。',
+        thumbnail_url: null,
+      },
+      {
+        id: 'mock-4',
+        url: 'https://www.dcard.tw/f/tech/p/250000000',
+        title: '軟體工程師求職面試經驗分享：系統架構與前端性能優化',
+        category: 'Dcard',
+        custom_category: '未分類',
+        created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+        description: '分享今年在各大科技廠的面試題庫與準備心得。',
+        thumbnail_url: null,
+      },
+      {
+        id: 'mock-5',
+        url: 'https://x.com/shadcn/status/178000000000',
+        title: 'New components added to the modern glassmorphism design system',
+        category: 'X',
+        custom_category: '設計靈感',
+        created_at: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
+        description: 'Beautiful, accessible components built with Tailwind CSS and Radix UI.',
+        thumbnail_url: null,
+      },
+      {
+        id: 'mock-6',
+        url: 'https://github.com/features/actions',
+        title: 'GitHub Actions: Automate your workflow from idea to production',
+        category: '其他來源',
+        custom_category: '實用工具',
+        created_at: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
+        description: 'CI/CD built directly into GitHub to automate your build and deploy pipelines.',
+        thumbnail_url: null,
+      }
+    ]
+    isLoadingInitial.value = false
+    return
+  }
+
   const { data, error } = await supabase
     .from('links')
     .select('*')
     .order('created_at', { ascending: false })
 
   if (!error && data) {
-    // 確保即使資料庫欄位是 NULL 也能自動轉成 '未分類'
     links.value = data.map(l => ({
       ...l,
       custom_category: l.custom_category || '未分類'
     }))
 
-    // 自動把現有資料的分類加入 customCategories（相容舊資料）
     const existingCats = new Set(links.value.filter(l => l.custom_category && l.custom_category !== '未分類').map(l => l.custom_category))
     existingCats.forEach(async cat => {
       if (!customCategories.value.includes(cat)) {
         customCategories.value.push(cat)
-        await addCategoryToDB(cat) // 順便把舊的本機分類同步上雲端
+        await addCategoryToDB(cat)
       }
     })
   }
@@ -111,24 +222,19 @@ onMounted(async () => {
   loadCustomCategories()
   await fetchLinks()
 
-  // 取消 Storage 事件監聽，現在改用資料庫了！
+  // 若有待整理的未分類連結，自動優先停留在「未分類」，方便連續整理
+  const hasUncategorized = links.value.some(l => !l.custom_category || l.custom_category === '未分類')
+  activeCollection.value = hasUncategorized ? '未分類' : '全部收藏'
 
   const urlParams = new URLSearchParams(window.location.search);
   const sharedUrl = urlParams.get('url');
 
   if (sharedUrl) {
-    // 1. 先解碼網址
     const decodedUrl = decodeURIComponent(sharedUrl);
-
-    // 2. 賦值給輸入框
     newUrl.value = decodedUrl;
-
-    // 3. 稍微延遲一下下，確保 Vue 已經更新了 DOM 和變數，再執行 addLink
     setTimeout(async () => {
       console.log('捷徑自動偵測到網址，準備儲存:', newUrl.value);
-      await addLink(true); // 傳入 fromShortcut = true
-
-      // 4. 存完後再清空網址列
+      await addLink(true);
       window.history.replaceState({}, document.title, window.location.pathname);
     }, 500);
   }
@@ -138,26 +244,20 @@ onMounted(async () => {
 const filteredLinks = computed(() => {
   let result = links.value;
 
-  // 1. 處理母分類 (平台) 過濾
   if (activePlatform.value !== '全部來源') {
     if (activePlatform.value === '其他來源') {
-      // 定義所有「非其他」的平台名單
       const knownPlatforms = ['Threads', 'Instagram', 'Dcard', 'YouTube', 'X'];
-      // 只有「不在」名單內的，才顯示在「其他來源」
       result = result.filter(link => !knownPlatforms.includes(link.category));
     } else {
-      // 精準匹配 (例如只抓 Instagram)
       result = result.filter(link => link.category === activePlatform.value);
     }
   }
 
-  // 2. 處理子分類 (收藏) 過濾
   if (activeCollection.value !== '全部收藏') {
     result = result.filter(link => link.custom_category === activeCollection.value);
   }
 
-  // 3. 排序 (最新的在前)
-  return result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  return [...result].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 });
 
 const getBadgeColor = (platform) => {
@@ -194,7 +294,6 @@ const fetchOgData = async (url) => {
       const fetchedTitle = json.data.title || ''
       const fetchedDesc = json.data.description || ''
       
-      // 防呆：過濾掉 Cloudflare 或擋爬蟲的安全防護提示
       const isBlocked = 
         fetchedTitle.toLowerCase().includes('attention required') || 
         fetchedTitle.toLowerCase().includes('cloudflare') ||
@@ -218,15 +317,21 @@ const fetchOgData = async (url) => {
   return { title: null, description: null, thumbnail_url: null }
 }
 
+// 連續快速新增連結
 const addLink = async (fromShortcut = false) => {
-  if (!newUrl.value) return
-  const platform = parseCategory(newUrl.value)
-  const tempUrl = newUrl.value
+  if (!newUrl.value || !newUrl.value.trim() || isAdding.value) return
+  isAdding.value = true
+
+  const tempUrl = newUrl.value.trim()
+  const platform = parseCategory(tempUrl)
   newUrl.value = ''
+
+  nextTick(() => {
+    addInputRef.value?.focus()
+  })
 
   const targetCollection = activeCollection.value !== '全部收藏' ? activeCollection.value : '未分類'
 
-  // 先用預設資料立即插入，再背景更新 OG 資料
   const insertData = {
     url: tempUrl,
     title: '抓取標題中...',
@@ -237,11 +342,25 @@ const addLink = async (fromShortcut = false) => {
     description: null,
   }
 
+  if (isDevUser.value) {
+    const mockItem = {
+      ...insertData,
+      id: 'mock-' + Date.now(),
+      created_at: new Date().toISOString()
+    }
+    links.value.unshift(mockItem)
+    isAdding.value = false
+    showToast(`✅ 已新增連結${targetCollection !== '未分類' ? '至「' + targetCollection + '」' : ''}！`)
+    return
+  }
+
   const { data, error } = await supabase
     .from('links')
     .insert([insertData])
     .select()
     .single()
+
+  isAdding.value = false
 
   if (error) {
     showToast('❌ 儲存失敗：' + error.message, 'error')
@@ -253,10 +372,9 @@ const addLink = async (fromShortcut = false) => {
     if (fromShortcut) {
       showToast('✅ 捷徑新增成功！正在抓取標題...')
     } else {
-      showToast('✅ 連結已儲存！')
+      showToast(`✅ 已新增連結${targetCollection !== '未分類' ? '至「' + targetCollection + '」' : ''}！`)
     }
 
-    // 背景異步抓 OG 資料，不阻塞 UI
     fetchOgData(tempUrl).then(async (og) => {
       const updatePayload = {
         title: og.title || '（無法取得標題）',
@@ -264,7 +382,6 @@ const addLink = async (fromShortcut = false) => {
         thumbnail_url: og.thumbnail_url,
       }
       await supabase.from('links').update(updatePayload).eq('id', data.id)
-      // 即時更新畫面，不需重整
       links.value = links.value.map(l =>
         l.id === data.id ? { ...l, ...updatePayload } : l
       )
@@ -272,7 +389,66 @@ const addLink = async (fromShortcut = false) => {
   }
 }
 
+// 單一卡片快速指派分類（連續整理核心 UX）
+const updateLinkCategory = async (linkId, newCategory, options = { showToast: true }) => {
+  const link = links.value.find(l => l.id === linkId)
+  if (!link) return
+  const oldCategory = link.custom_category || '未分類'
+  if (oldCategory === newCategory) return
+
+  // 1. 本地樂觀更新：產生全新陣列與物件，確保 Vue 響應式重新計算 filteredLinks
+  links.value = links.value.map(l => {
+    if (l.id === linkId) {
+      return { ...l, custom_category: newCategory }
+    }
+    return l
+  })
+
+  // 2. 提供復原 Toast 按鈕
+  if (options.showToast) {
+    showToast(`已分類至「${newCategory}」`, 'success', {
+      label: '復原',
+      onClick: () => {
+        updateLinkCategory(linkId, oldCategory, { showToast: false })
+      }
+    })
+  }
+
+  if (isDevUser.value) return
+
+  // 3. 後端更新
+  const { error } = await supabase
+    .from('links')
+    .update({ custom_category: newCategory })
+    .eq('id', linkId)
+
+  if (error) {
+    // 復原
+    links.value = links.value.map(l => {
+      if (l.id === linkId) {
+        return { ...l, custom_category: oldCategory }
+      }
+      return l
+    })
+    showToast('❌ 更新分類失敗：' + error.message, 'error')
+  }
+}
+
+// 從卡片上直接建立新分類並指派
+const handleCreateCategoryFromCard = async (linkId) => {
+  const newName = await createCustomCategory()
+  if (newName && linkId) {
+    await updateLinkCategory(linkId, newName)
+  }
+}
+
 const deleteLink = async (id) => {
+  if (isDevUser.value) {
+    links.value = links.value.filter(link => link.id !== id)
+    showToast('已刪除連結')
+    return
+  }
+
   const { error } = await supabase.from('links').delete().eq('id', id)
   if (!error) {
     links.value = links.value.filter(link => link.id !== id)
@@ -300,22 +476,36 @@ const handleToggleSelect = (id) => {
   selectedLinks.value = newSet
 }
 
+// 批次全選 / 取消全選
+const isAllSelected = computed(() => {
+  if (filteredLinks.value.length === 0) return false
+  return filteredLinks.value.every(l => selectedLinks.value.has(l.id))
+})
+
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedLinks.value.clear()
+  } else {
+    filteredLinks.value.forEach(l => selectedLinks.value.add(l.id))
+  }
+}
+
+// 批次移動分類：不跳轉頁面，保留在當前工作流，提供復原選項
 const applyBatchCategory = async () => {
   if (selectedLinks.value.size === 0) return
 
   const idsToUpdate = Array.from(selectedLinks.value)
   const targetCategory = batchTargetCategory.value
+  const count = idsToUpdate.length
 
-  const { error } = await supabase
-    .from('links')
-    .update({ custom_category: targetCategory })
-    .in('id', idsToUpdate)
+  const previousCategories = new Map()
+  links.value.forEach(l => {
+    if (idsToUpdate.includes(l.id)) {
+      previousCategories.set(l.id, l.custom_category || '未分類')
+    }
+  })
 
-  if (error) {
-    alert('批次移動失敗：' + error.message)
-    return
-  }
-
+  // 本地樂觀更新
   links.value = links.value.map(link => {
     if (idsToUpdate.includes(link.id)) {
       return { ...link, custom_category: targetCategory }
@@ -325,14 +515,52 @@ const applyBatchCategory = async () => {
 
   isBatchMode.value = false
   selectedLinks.value.clear()
-  if (targetCategory !== '未分類') {
-    activeCollection.value = targetCategory
+
+  showToast(`已將 ${count} 筆連結移至「${targetCategory}」`, 'success', {
+    label: '復原',
+    onClick: async () => {
+      links.value = links.value.map(link => {
+        if (previousCategories.has(link.id)) {
+          return { ...link, custom_category: previousCategories.get(link.id) }
+        }
+        return link
+      })
+      if (!isDevUser.value) {
+        for (const [id, oldCat] of previousCategories.entries()) {
+          await supabase.from('links').update({ custom_category: oldCat }).eq('id', id)
+        }
+      }
+    }
+  })
+
+  if (isDevUser.value) return
+
+  const { error } = await supabase
+    .from('links')
+    .update({ custom_category: targetCategory })
+    .in('id', idsToUpdate)
+
+  if (error) {
+    showToast('❌ 批次移動失敗：' + error.message, 'error')
+    links.value = links.value.map(link => {
+      if (previousCategories.has(link.id)) {
+        return { ...link, custom_category: previousCategories.get(link.id) }
+      }
+      return link
+    })
   }
 }
 
 const editLinkTitle = async (id, oldTitle) => {
   const newTitle = prompt('請輸入新的標題：', oldTitle)
   if (newTitle !== null && newTitle.trim() !== '') {
+    if (isDevUser.value) {
+      links.value = links.value.map(l =>
+        l.id === id ? { ...l, title: newTitle.trim() } : l
+      )
+      return
+    }
+
     const { error } = await supabase
       .from('links')
       .update({ title: newTitle.trim() })
@@ -352,7 +580,7 @@ const handleEditLink = (id, oldTitle) => {
   editLinkTitle(id, oldTitle)
 }
 
-// 編輯子分類名稱的邏輯 (會同步更新所有使用該分類的連結)
+// 編輯子分類名稱
 const editCustomCategory = async (oldName) => {
   if (oldName === '未分類' || oldName === '全部收藏') return
 
@@ -365,33 +593,31 @@ const editCustomCategory = async (oldName) => {
     return
   }
 
-  // 1. 更新資料庫裡所有使用此子分類的連結
-  const { error } = await supabase
-    .from('links')
-    .update({ custom_category: trimmedNewName })
-    .eq('custom_category', oldName)
-    .eq('user_id', props.user.id) // 確保只改自己的
+  if (!isDevUser.value) {
+    const { error } = await supabase
+      .from('links')
+      .update({ custom_category: trimmedNewName })
+      .eq('custom_category', oldName)
+      .eq('user_id', props.user.id)
 
-  if (error) {
-    alert('更新分類名稱失敗：' + error.message)
-    return
+    if (error) {
+      alert('更新分類名稱失敗：' + error.message)
+      return
+    }
+
+    await deleteCategoryFromDB(oldName)
+    await addCategoryToDB(trimmedNewName)
   }
-
-  // 2. 更新雲端分類名稱 (透過刪舊增新達成)
-  await deleteCategoryFromDB(oldName)
-  await addCategoryToDB(trimmedNewName)
 
   const idx = customCategories.value.indexOf(oldName)
   if (idx !== -1) {
     customCategories.value[idx] = trimmedNewName
   }
 
-  // 3. 更新目前顯示在畫面上的連結資料
   links.value = links.value.map(l =>
     l.custom_category === oldName ? { ...l, custom_category: trimmedNewName } : l
   )
 
-  // 4. 重設狀態
   if (activeCollection.value === oldName) {
     activeCollection.value = trimmedNewName
   }
@@ -404,40 +630,53 @@ const deleteCustomCategory = async (catName) => {
   const confirmDelete = confirm(`確定要刪除分類「${catName}」嗎？\n\n注意：此分類下的所有連結將會被移至「未分類」。`)
   if (!confirmDelete) return
 
-  // 1. 將該分類下的所有連結，改為「未分類」
-  const { error } = await supabase
-    .from('links')
-    .update({ custom_category: '未分類' })
-    .eq('custom_category', catName)
-    .eq('user_id', props.user.id)
+  if (!isDevUser.value) {
+    const { error } = await supabase
+      .from('links')
+      .update({ custom_category: '未分類' })
+      .eq('custom_category', catName)
+      .eq('user_id', props.user.id)
 
-  if (error) {
-    alert('刪除分類失敗：' + error.message)
-    return
+    if (error) {
+      alert('刪除分類失敗：' + error.message)
+      return
+    }
+
+    await deleteCategoryFromDB(catName)
   }
 
-  // 2. 從資料庫與本地名單中移除
   customCategories.value = customCategories.value.filter(c => c !== catName)
-  await deleteCategoryFromDB(catName)
 
-  // 3. 更新畫面中原本是這個分類的資料
   links.value = links.value.map(l =>
     l.custom_category === catName ? { ...l, custom_category: '未分類' } : l
   )
 
-  // 4. 如果目前正在看這個分類，跳回「全部收藏」
   if (activeCollection.value === catName) {
     activeCollection.value = '全部收藏'
   }
   showToast(`已刪除分類「${catName}」`)
 }
 
+// 複製當前 Session Token（供從正式站貼回本機同步）
+const copySessionToken = async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      await navigator.clipboard.writeText(JSON.stringify(session))
+      showToast('✅ 已複製登入 Token！可直接在 localhost 點「貼上 Token」登入')
+    } else {
+      showToast('目前為本機預覽模式，無正式 Token', 'error')
+    }
+  } catch (err) {
+    showToast('複製失敗：' + err.message, 'error')
+  }
+}
+
 const handleLogout = async () => {
-  // 設定登出旗標，Login.vue 看到這個旗標就不會自動執行登入
+  sessionStorage.removeItem('linksort_dev_preview')
   sessionStorage.setItem('liff_just_logged_out', 'true')
-  // 只做 Supabase 登出，LIFF 的 token 由 Login.vue 在下次掛載時清除
-  // 不在這裡碰 liff.logout()，避免它在某些瀏覽器觸發重新導向，中斷 signOut
   await supabase.auth.signOut()
+  window.location.reload()
 }
 
 // 手機側邊欄開關
@@ -445,7 +684,6 @@ const isSidebarOpen = ref(false)
 const closeSidebar = () => { isSidebarOpen.value = false }
 const openSidebar = () => { isSidebarOpen.value = true }
 
-// 手機上點選分類後自動關閉側邊欄
 const selectPlatform = (plat) => {
   activePlatform.value = plat
   closeSidebar()
@@ -458,11 +696,19 @@ const selectCollection = (col) => {
 
 <template>
   <div class="dashboard-layout">
-    <!-- Toast 通知區域 -->
+    <!-- 本機預覽提示頂條 -->
+    <div v-if="isDevUser" class="dev-banner">
+      <span>🛠️ 目前處於「本機預覽模式 (含測試資料)」，所有修改即時反應但不會覆蓋雲端資料</span>
+    </div>
+
+    <!-- Toast 通知區域（支援復原操作） -->
     <div class="toast-container">
       <transition-group name="toast-anim">
         <div v-for="toast in toasts" :key="toast.id" class="toast" :class="toast.type">
-          {{ toast.message }}
+          <span class="toast-message">{{ toast.message }}</span>
+          <button v-if="toast.action" class="toast-action-btn" @click="toast.action.onClick">
+            {{ toast.action.label }}
+          </button>
         </div>
       </transition-group>
     </div>
@@ -470,42 +716,52 @@ const selectCollection = (col) => {
     <!-- 手機遮罩背景 -->
     <div class="sidebar-overlay" :class="{ active: isSidebarOpen }" @click="closeSidebar"></div>
 
-    <!-- Sidebar -->
+    <!-- Sidebar 側邊導覽列（含即時數量統計） -->
     <aside class="sidebar glass-panel" :class="{ 'sidebar-open': isSidebarOpen }">
       <div class="sidebar-header">
         <div class="logo">
           <span class="logo-icon">🔗</span>
           <h2>LinkSort</h2>
         </div>
-        <p class="user-greeting">哈囉，{{ user.user_metadata?.display_name || user.email.split('@')[0] }}</p>
+        <p class="user-greeting">
+          哈囉，{{ user.user_metadata?.display_name || user.email?.split('@')[0] || '使用者' }}
+          <span v-if="isDevUser" class="dev-tag">預覽版</span>
+        </p>
       </div>
 
       <div class="sidebar-nav">
         <!-- 母分類 -->
-        <h3>🏢 平台來源 (系統分類)</h3>
+        <h3>🏢 平台來源</h3>
         <ul class="nav-list platform-list">
           <li v-for="plat in platforms" :key="plat" :class="{ active: activePlatform === plat }"
             @click="selectPlatform(plat)">
             <span class="color-dot" :style="{ background: getBadgeColor(plat) }"></span>
-            {{ plat }}
+            <span class="list-text">{{ plat }}</span>
+            <span class="nav-count">{{ categoryCounts.platforms[plat] || 0 }}</span>
           </li>
         </ul>
 
         <div class="divider"></div>
 
         <!-- 子分類 -->
-        <h3>📁 我的收藏 (你的標籤)</h3>
+        <h3>📁 我的收藏標籤</h3>
         <ul class="nav-list collection-list">
           <li :class="{ active: activeCollection === '全部收藏' }" @click="selectCollection('全部收藏')">
             <span class="list-text">全部收藏</span>
+            <span class="nav-count">{{ categoryCounts.total }}</span>
           </li>
+
           <li :class="{ active: activeCollection === '未分類' }" @click="selectCollection('未分類')">
-            <span class="list-text">未分類</span>
+            <span class="list-text">⚡ 未分類 (待整理)</span>
+            <span class="nav-count" :class="{ 'has-unread': categoryCounts.uncategorized > 0 }">
+              {{ categoryCounts.uncategorized }}
+            </span>
           </li>
+
           <li v-for="cat in customCategories" :key="cat" :class="{ active: activeCollection === cat }"
             class="collection-item">
-            <!-- 名稱與編輯按鈕橫排，編輯按鈕永遠可見 -->
             <span class="list-text" @click="selectCollection(cat)">{{ cat }}</span>
+            <span class="nav-count" @click="selectCollection(cat)">{{ categoryCounts.custom[cat] || 0 }}</span>
             <div class="category-actions">
               <button class="edit-cat-btn" @click.stop="editCustomCategory(cat)" title="編輯分類名稱">
                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -524,13 +780,18 @@ const selectCollection = (col) => {
             </div>
           </li>
         </ul>
-        <button class="add-category-btn" @click="createCustomCategory">
+        <button class="add-category-btn" @click="createCustomCategory()">
           + 新增子分類標籤
         </button>
       </div>
 
       <div class="sidebar-footer">
-        <button class="logout-btn" @click="handleLogout">登出</button>
+        <button v-if="!isDevUser" class="copy-token-btn" @click="copySessionToken" title="複製登入 Token">
+          📋 複製 Token (本機同步用)
+        </button>
+        <button class="logout-btn" @click="handleLogout">
+          {{ isDevUser ? '結束本機預覽' : '登出' }}
+        </button>
       </div>
     </aside>
 
@@ -549,17 +810,29 @@ const selectCollection = (col) => {
             </svg>
           </button>
 
+          <!-- 連續快速新增表單 -->
           <div class="add-link-form">
-            <input type="url" v-model="newUrl" placeholder="貼上連結按 Enter 儲存..." @keyup.enter="addLink" />
-            <button class="add-btn" @click="addLink">儲存</button>
+            <div class="target-category-indicator" :title="'儲存時將自動分類至：' + (activeCollection !== '全部收藏' ? activeCollection : '未分類')">
+              <span>{{ activeCollection !== '全部收藏' ? '📁 ' + activeCollection : '🏷️ 未分類' }}</span>
+            </div>
+            <input 
+              ref="addInputRef"
+              type="url" 
+              v-model="newUrl" 
+              placeholder="貼上連結按 Enter 快速新增..." 
+              @keyup.enter="addLink(false)" 
+              :disabled="isAdding"
+            />
+            <button class="add-btn" @click="addLink(false)" :disabled="isAdding || !newUrl.trim()">
+              {{ isAdding ? '新增中...' : '儲存' }}
+            </button>
           </div>
         </template>
 
-        <!-- ===== 批次模式：header 直接變成批次操作列 ===== -->
+        <!-- ===== 批次模式 ===== -->
         <template v-else>
-          <!-- 左側：已選筆數 + 取消按鈕 -->
           <div class="batch-left">
-            <button class="cancel-batch-btn" @click="toggleBatchMode" title="取消">
+            <button class="cancel-batch-btn" @click="toggleBatchMode" title="離開批次管理">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -569,12 +842,14 @@ const selectCollection = (col) => {
             <span class="batch-count">
               已選 <strong>{{ selectedLinks.size }}</strong> 項
             </span>
+            <button class="select-all-btn" @click="toggleSelectAll">
+              {{ isAllSelected ? '取消全選' : '全選本頁' }}
+            </button>
           </div>
 
-          <!-- 右側：分類選擇 + 確認按鈕 -->
           <div class="batch-right">
             <select v-model="batchTargetCategory" class="batch-select-inline">
-              <option value="未分類">取消標籤</option>
+              <option value="未分類">設為未分類</option>
               <option v-for="cat in customCategories" :key="cat" :value="cat">{{ cat }}</option>
             </select>
             <button class="confirm-batch-btn" @click="applyBatchCategory" :disabled="selectedLinks.size === 0">
@@ -586,32 +861,112 @@ const selectCollection = (col) => {
       </header>
 
       <div class="links-container">
-        <h2 class="section-title">
-          <span class="title-platform">{{ activePlatform }}</span>
-          <span class="title-separator" v-if="activeCollection !== '全部收藏'">/</span>
-          <span class="title-collection" v-if="activeCollection !== '全部收藏'">{{ activeCollection }}</span>
-          <span v-if="isBatchMode" class="batch-title-hint">(點擊卡片選取)</span>
-        </h2>
+        <!-- 標題欄與主要模式快速切換頁籤 -->
+        <div class="section-title-bar">
+          <div class="title-left">
+            <h2 class="section-title">
+              <span class="title-platform">{{ activePlatform }}</span>
+              <span class="title-separator" v-if="activeCollection !== '全部收藏' && activeCollection !== '未分類'">/</span>
+              <span class="title-collection" v-if="activeCollection !== '全部收藏' && activeCollection !== '未分類'">{{ activeCollection }}</span>
+            </h2>
+          </div>
+
+          <!-- 快速切換「待整理」與「全部收藏」頁籤（讓使用者清楚掌握當前模式） -->
+          <div class="view-mode-tabs" v-if="!isBatchMode">
+            <button 
+              type="button" 
+              class="mode-tab-btn" 
+              :class="{ 'active': activeCollection === '未分類' }"
+              @click="selectCollection('未分類')"
+              title="待整理收件匣：分類後立即移出此畫面"
+            >
+              <span class="tab-icon">⚡</span>
+              <span>待整理</span>
+              <span class="tab-count" :class="{ 'has-badge': categoryCounts.uncategorized > 0 }">
+                {{ categoryCounts.uncategorized }}
+              </span>
+            </button>
+            <button 
+              type="button" 
+              class="mode-tab-btn" 
+              :class="{ 'active': activeCollection === '全部收藏' }"
+              @click="selectCollection('全部收藏')"
+              title="全部收藏：查看所有整理完成與留存的連結"
+            >
+              <span class="tab-icon">📁</span>
+              <span>全部收藏</span>
+              <span class="tab-count">{{ categoryCounts.total }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 待整理模式下的提示橫幅 -->
+        <div class="triage-status-banner" v-if="activeCollection === '未分類' && filteredLinks.length > 0">
+          <span class="banner-icon">🎯</span>
+          <span class="banner-text">
+            <strong>待整理收件匣：</strong>
+            為卡片選擇分類後會<strong>立即移出此畫面</strong>，讓您順暢整理剩餘項目（整理好的連結都會完整保存在「全部收藏」中）
+          </span>
+        </div>
 
         <div v-if="isLoadingInitial" class="loading-state">
-          載入中...
+          <div class="loader-inline"></div>
+          <p>載入連結中...</p>
         </div>
         <div v-else>
-          <div class="links-grid" v-if="filteredLinks.length">
-            <LinkCard v-for="link in filteredLinks" :key="link.id" :link="link" :selectable="isBatchMode"
-              :selected="selectedLinks.has(link.id)" @delete="deleteLink" @toggleSelect="handleToggleSelect"
-              @edit="handleEditLink" />
-          </div>
-          <div class="empty-state glass-panel" v-else>
-            <span class="icon">📂</span>
-            <p>這個篩選條件下沒有任何連結喔！</p>
-          </div>
+          <!-- 切換類別時使用平滑 view-fade，避免卡片橫向向左滑動飛躍 -->
+          <transition name="view-fade" mode="out-in">
+            <div :key="activePlatform + '_' + activeCollection">
+              <!-- 卡片格線（原地淡入/淡出，不使用橫向移動動畫） -->
+              <transition-group 
+                name="card-fade" 
+                tag="div" 
+                class="links-grid" 
+                v-if="filteredLinks.length"
+              >
+                <LinkCard 
+                  v-for="link in filteredLinks" 
+                  :key="link.id" 
+                  :link="link" 
+                  :categories="customCategories"
+                  :selectable="isBatchMode"
+                  :selected="selectedLinks.has(link.id)" 
+                  @delete="deleteLink" 
+                  @toggleSelect="handleToggleSelect"
+                  @edit="handleEditLink" 
+                  @updateCategory="updateLinkCategory"
+                  @createCategory="handleCreateCategoryFromCard"
+                />
+              </transition-group>
+
+              <!-- 待整理全部完成慶祝狀態 (Inbox Zero) -->
+              <div class="empty-state glass-panel empty-inbox" v-else-if="activeCollection === '未分類'">
+                <span class="empty-icon">🎉</span>
+                <h3>太棒了！所有待整理連結已全部分類完成</h3>
+                <p>未分類清單已清空，所有連結均已妥善歸類於各自標籤中！</p>
+                <button class="empty-action-btn" @click="selectCollection('全部收藏')">
+                  查看全部收藏 ({{ categoryCounts.total }})
+                </button>
+              </div>
+
+              <!-- 一般條件無資料狀態 -->
+              <div class="empty-state glass-panel" v-else>
+                <span class="empty-icon">📂</span>
+                <p>「{{ activePlatform }} / {{ activeCollection }}」目前沒有任何連結喔！</p>
+                <button class="empty-action-btn" @click="selectCollection('全部收藏')">
+                  返回全部收藏
+                </button>
+              </div>
+            </div>
+          </transition>
         </div>
       </div>
     </main>
+
+    <!-- 浮動批次管理按鈕 -->
     <button class="floating-batch-btn" :class="{ 'active-mode': isBatchMode }" @click="toggleBatchMode"
-      :title="isBatchMode ? '取消管理' : '批次管理'">
-      <svg v-if="!isBatchMode" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+      :title="isBatchMode ? '取消批次管理' : '開啟批次管理'">
+      <svg v-if="!isBatchMode" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="9 11 12 14 22 4"></polyline>
         <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
@@ -631,23 +986,36 @@ const selectCollection = (col) => {
   position: relative;
 }
 
+.dev-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: center;
+  padding: 0.3rem 1rem;
+  z-index: 1000;
+}
+
 /* === 側邊欄遮罩（手機用）=== */
 .sidebar-overlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(4px);
   z-index: 200;
   opacity: 0;
   pointer-events: none;
-  /* 最關鍵：預設不攔截任何點擊/觸碰 */
   transition: opacity 0.3s ease;
 }
 
 /* === 側邊欄 === */
 .sidebar {
-  width: 260px;
+  width: 270px;
   height: calc(100vh - 2rem);
   margin: 1rem;
   border-radius: 20px;
@@ -655,30 +1023,31 @@ const selectCollection = (col) => {
   flex-direction: column;
   padding: 1.5rem;
   flex-shrink: 0;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .sidebar-header {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .logo {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 
 .logo-icon {
   background: linear-gradient(135deg, var(--accent-glow), var(--accent-hover));
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .logo h2 {
@@ -691,6 +1060,18 @@ const selectCollection = (col) => {
   font-size: 0.85rem;
   color: var(--text-secondary);
   opacity: 0.8;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dev-tag {
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
 }
 
 /* === 側邊欄導覽 === */
@@ -716,13 +1097,15 @@ const selectCollection = (col) => {
   color: var(--text-secondary);
   margin-bottom: 0.75rem;
   margin-top: 0.5rem;
-  opacity: 0.7;
+  opacity: 0.75;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
 .divider {
   height: 1px;
   background: var(--panel-border);
-  margin: 1.25rem 0;
+  margin: 1.2rem 0;
 }
 
 .nav-list {
@@ -733,8 +1116,8 @@ const selectCollection = (col) => {
 }
 
 .nav-list li {
-  padding: 0.65rem 1rem;
-  border-radius: 8px;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
   color: var(--text-secondary);
@@ -742,8 +1125,7 @@ const selectCollection = (col) => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-height: 44px;
-  /* a11y 觸控目標 */
+  min-height: 42px;
 }
 
 .nav-list li:hover {
@@ -754,7 +1136,7 @@ const selectCollection = (col) => {
 .nav-list li.active {
   background: var(--accent-glow);
   color: white;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .collection-item {
@@ -770,9 +1152,34 @@ const selectCollection = (col) => {
   white-space: nowrap;
 }
 
+/* 數量統計標籤 */
+.nav-count {
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-left: auto;
+  transition: all 0.2s;
+}
+
+.nav-list li.active .nav-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.nav-count.has-unread {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  font-weight: 600;
+}
+
 .category-actions {
   display: flex;
   gap: 2px;
+  margin-left: 0.3rem;
 }
 
 .edit-cat-btn,
@@ -781,37 +1188,35 @@ const selectCollection = (col) => {
   border: none;
   color: var(--text-secondary);
   opacity: 0.35;
-  /* 永遠可見，手機上不需要 hover 才能點擊 */
   cursor: pointer;
-  padding: 5px 6px;
+  padding: 4px;
   border-radius: 6px;
   transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 30px;
-  min-height: 30px;
-  /* a11y 觸控目標大小 */
+  min-width: 28px;
+  min-height: 28px;
   flex-shrink: 0;
 }
 
 .collection-item:hover .edit-cat-btn,
 .collection-item:hover .delete-cat-btn {
-  opacity: 0.7;
+  opacity: 0.75;
 }
 
 .edit-cat-btn:hover,
 .edit-cat-btn:active {
   opacity: 1 !important;
   color: var(--accent-color);
-  background: rgba(99, 102, 241, 0.12);
+  background: rgba(99, 102, 241, 0.15);
 }
 
 .delete-cat-btn:hover,
 .delete-cat-btn:active {
   opacity: 1 !important;
   color: #ef4444;
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.15);
 }
 
 .color-dot {
@@ -826,41 +1231,59 @@ const selectCollection = (col) => {
 .add-category-btn {
   width: 100%;
   padding: 0.65rem;
-  margin-top: 1rem;
+  margin-top: 0.85rem;
   background: transparent;
-  border: 1px dashed var(--text-secondary);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
   color: var(--text-secondary);
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 0.85rem;
   transition: all 0.2s;
-  min-height: 44px;
+  min-height: 42px;
 }
 
 .add-category-btn:hover {
   border-color: var(--accent-color);
   color: var(--accent-color);
-  background: rgba(99, 102, 241, 0.05);
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .sidebar-footer {
   margin-top: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.45rem;
+}
+
+.copy-token-btn {
+  width: 100%;
+  padding: 0.65rem;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.copy-token-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  color: #fff;
 }
 
 .logout-btn {
   width: 100%;
-  padding: 0.85rem;
+  padding: 0.75rem;
   background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
+  color: var(--text-secondary);
   border-radius: 10px;
   font-weight: 500;
-  min-height: 44px;
+  font-size: 0.9rem;
+  min-height: 42px;
 }
 
 .logout-btn:hover {
-  background: rgba(244, 63, 94, 0.2);
+  background: rgba(244, 63, 94, 0.18);
   color: #f43f5e;
 }
 
@@ -878,17 +1301,15 @@ const selectCollection = (col) => {
 .main-header {
   padding: 0.75rem 1.25rem;
   border-radius: 16px;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   flex-shrink: 0;
 }
 
-/* 漢堡按鈕：桌面隱藏、手機顯示 */
 .hamburger-btn {
   display: none;
-  /* PC 上隱藏 */
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid var(--panel-border);
   color: var(--text-primary);
@@ -901,56 +1322,44 @@ const selectCollection = (col) => {
   flex-shrink: 0;
 }
 
-/* 批次管理 icon 按鈕：純 icon，固定 40×44px，永遠不超出畫面 */
-.batch-icon-btn {
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--panel-border);
-  color: var(--text-secondary);
-  border-radius: 8px;
-  width: 40px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all 0.2s;
-}
-
-.batch-icon-btn:hover {
-  color: var(--accent-color);
-  background: rgba(99, 102, 241, 0.12);
-  border-color: var(--accent-color);
-}
-
-.batch-icon-btn:active {
-  transform: scale(0.94);
-}
-
 .hamburger-btn:hover {
   background: rgba(255, 255, 255, 0.15);
 }
 
+/* 連續新增表單 */
 .add-link-form {
   display: flex;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.6rem;
   flex-grow: 1;
+}
+
+.target-category-indicator {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0 0.75rem;
+  height: 44px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
 }
 
 .add-link-form input {
   flex-grow: 1;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--panel-border);
-  font-size: 1rem;
+  font-size: 0.95rem;
   min-width: 0;
+  height: 44px;
 }
 
 .add-link-form input:focus {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.add-link-form input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  background: rgba(0, 0, 0, 0.45);
 }
 
 .add-btn {
@@ -961,7 +1370,7 @@ const selectCollection = (col) => {
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
-  min-height: 44px;
+  height: 44px;
 }
 
 .add-btn:hover:not(:disabled) {
@@ -969,55 +1378,16 @@ const selectCollection = (col) => {
   transform: translateY(-1px);
 }
 
-.add-btn:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
 .add-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.batch-mode-btn {
-  padding: 0.65rem 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
-  border-radius: 8px;
-  font-weight: 500;
-  white-space: nowrap;
-  border: 1px solid transparent;
-  transition: all 0.2s;
-  flex-shrink: 0;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.batch-label-desktop {
-  display: inline;
-}
-
-.batch-icon-mobile {
-  display: none;
-}
-
-.batch-mode-btn:hover {
-  background: var(--panel-border);
-}
-
-.batch-mode-btn.active {
-  background: rgba(244, 63, 94, 0.1);
-  color: #f43f5e;
-  border-color: rgba(244, 63, 94, 0.3);
-}
-
-/* ─── 批次模式 header 元件 ─── */
-
+/* 批次管理狀態列 */
 .batch-left {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
   flex-shrink: 0;
 }
 
@@ -1036,9 +1406,8 @@ const selectCollection = (col) => {
   flex-shrink: 0;
 }
 
-.cancel-batch-btn:hover,
-.cancel-batch-btn:active {
-  background: rgba(244, 63, 94, 0.15);
+.cancel-batch-btn:hover {
+  background: rgba(244, 63, 94, 0.2);
   color: #f43f5e;
 }
 
@@ -1053,6 +1422,23 @@ const selectCollection = (col) => {
   font-size: 1rem;
 }
 
+.select-all-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.select-all-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
 .batch-right {
   display: flex;
   align-items: center;
@@ -1063,7 +1449,7 @@ const selectCollection = (col) => {
 }
 
 .batch-select-inline {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--panel-border);
   color: white;
   padding: 0 0.6rem;
@@ -1087,173 +1473,10 @@ const selectCollection = (col) => {
   color: white;
 }
 
-/* === 連結列表 === */
-.links-container {
-  flex-grow: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 0.5rem;
-  padding-bottom: 6rem;
-  -webkit-overflow-scrolling: touch;
-  /* iOS 慣性滾動 */
-  overscroll-behavior-y: contain;
-  /* 防止觸發瀏覽器的下拉刷新 */
-}
-
-.links-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.links-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.links-container::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-.section-title {
-  margin-bottom: 1.25rem;
-  font-weight: 600;
-  letter-spacing: -0.5px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.title-platform {
-  color: var(--text-primary);
-}
-
-.title-separator {
-  color: var(--text-secondary);
-  opacity: 0.5;
-}
-
-.title-collection {
-  color: var(--accent-color);
-  background: rgba(99, 102, 241, 0.1);
-  padding: 0.2rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.95em;
-}
-
-.batch-title-hint {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  font-weight: normal;
-}
-
-.links-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.25rem;
-  padding-bottom: 1rem;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 260px;
-  border-radius: 16px;
-  gap: 1rem;
-  opacity: 0.6;
-}
-
-.empty-state .icon {
-  font-size: 3rem;
-}
-
-.loading-state {
-  padding-top: 3rem;
-  text-align: center;
-  color: var(--text-secondary);
-  font-size: 1.1rem;
-}
-
-/* === 批次操作工具列 === */
-.batch-action-bar {
-  position: absolute;
-  bottom: 1.25rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 92%;
-  max-width: 600px;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(16px);
-  padding: 0.85rem 1.25rem;
-  border-radius: 99px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--accent-glow);
-  z-index: 100;
-  gap: 0.75rem;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 20px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-.animate-slide-up {
-  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.batch-info {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.batch-info strong {
-  color: white;
-  font-size: 1rem;
-}
-
-.batch-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.batch-select {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--panel-border);
-  color: white;
-  padding: 0.4rem 0.75rem;
-  border-radius: 8px;
-  outline: none;
-  font-family: inherit;
-  font-size: 0.9rem;
-}
-
-.batch-select:focus {
-  border-color: var(--accent-color);
-}
-
-.batch-select option {
-  background: var(--bg-gradient-end);
-  color: white;
-}
-
 .confirm-batch-btn {
   background: var(--accent-color);
   color: white;
-  padding: 0.45rem 1.1rem;
+  padding: 0.45rem 1.15rem;
   border-radius: 8px;
   font-weight: 500;
   white-space: nowrap;
@@ -1269,55 +1492,389 @@ const selectCollection = (col) => {
   cursor: not-allowed;
 }
 
+/* === 連結列表區域 === */
+.links-container {
+  flex-grow: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.5rem;
+  padding-bottom: 6rem;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
 
+.links-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.links-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+}
+
+.section-title-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* 主要模式切換頁籤 */
+.view-mode-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.mode-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+
+.mode-tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-tab-btn.active {
+  background: var(--accent-color);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+.tab-count {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.tab-count.has-badge {
+  background: #f59e0b;
+  color: #000;
+  font-weight: 700;
+}
+
+.mode-tab-btn.active .tab-count.has-badge {
+  background: #fff;
+  color: var(--accent-color);
+}
+
+/* 待整理提示橫幅 */
+.triage-status-banner {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 12px;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #fbbf24;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.banner-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.banner-text strong {
+  color: #fff;
+}
+
+.section-title {
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.title-platform {
+  color: var(--text-primary);
+}
+
+.title-separator {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.title-collection {
+  color: var(--accent-color);
+  background: rgba(99, 102, 241, 0.12);
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.95em;
+}
+
+.item-total-tag {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+  font-weight: 400;
+}
+
+.batch-title-hint {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+.links-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 1.25rem;
+  padding-bottom: 1rem;
+}
+
+/* === 切換類別平滑淡入淡出（徹底消除橫向向左飄移動畫）=== */
+.view-fade-enter-active,
+.view-fade-leave-active {
+  transition: opacity 0.16s ease;
+}
+.view-fade-enter-from,
+.view-fade-leave-to {
+  opacity: 0;
+}
+
+/* 單張卡片整理移出時原地縮小淡出 */
+.card-fade-enter-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.card-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.card-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.card-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+/* 狀態區塊 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  border-radius: 16px;
+  gap: 0.75rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+.empty-icon {
+  font-size: 3rem;
+}
+
+.empty-inbox h3 {
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.empty-inbox p {
+  color: var(--text-secondary);
+  max-width: 420px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.empty-action-btn {
+  margin-top: 0.75rem;
+  background: var(--accent-color);
+  color: #fff;
+  padding: 0.55rem 1.25rem;
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.empty-action-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.loading-state {
+  padding-top: 4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: var(--text-secondary);
+}
+
+.loader-inline {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--accent-color);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 浮動批次按鈕 */
 .floating-batch-btn {
   position: fixed;
   right: 24px;
   bottom: 24px;
-  width: 56px;
-  height: 56px;
-  border-radius: 28px;
-  background: var(--accent-color, #4f46e5);
+  width: 54px;
+  height: 54px;
+  border-radius: 27px;
+  background: var(--accent-color);
   color: white;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
   z-index: 500;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+}
+
+.floating-batch-btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 22px rgba(99, 102, 241, 0.4);
 }
 
 .floating-batch-btn.active-mode {
   background: #ef4444;
-  /* 進入管理模式變紅色 */
-  width: 90px;
+  width: 86px;
   border-radius: 16px;
 }
 
 .cancel-text {
-  font-weight: bold;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* === Toast 通知（含復原按鈕）=== */
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast {
+  background: rgba(22, 27, 46, 0.96);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  padding: 0.65rem 1.15rem;
+  border-radius: 40px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  pointer-events: auto;
+}
+
+.toast.error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(80, 20, 20, 0.95);
+}
+
+.toast-action-btn {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toast-action-btn:hover {
+  background: #fff;
+  color: #0f172a;
+}
+
+.toast-anim-enter-active {
+  animation: toast-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.toast-anim-leave-active {
+  animation: toast-out 0.2s ease forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+  }
 }
 
 /* ============================================
    手機版 RWD (768px 以下)
    ============================================ */
 @media (max-width: 768px) {
-
-  /* 遮罩：手機上顯示，但預設不擋觸碰 */
   .sidebar-overlay {
     display: block;
-    pointer-events: none;
   }
-
-  /* 只有開啟側邊欄時才允許觸碰（用來點擊關閉） */
   .sidebar-overlay.active {
     opacity: 1;
     pointer-events: auto;
   }
 
-  /* 側邊欄：手機上隱藏、滑動開啟 */
   .sidebar {
     position: fixed;
     left: 0;
@@ -1334,117 +1891,38 @@ const selectCollection = (col) => {
     transform: translateX(0);
   }
 
-  /* 主畫面：手機上填滿整個寬度 */
   .main-content {
     padding: 0.75rem;
     padding-bottom: 0;
   }
 
-  /* Header 調整 */
   .main-header {
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
     padding: 0.65rem 0.75rem;
     border-radius: 12px;
     gap: 0.5rem;
   }
 
-  /* 漢堡按鈕：手機上顯示 */
   .hamburger-btn {
     display: flex;
   }
 
-  /* 輸入框在手機上縮短佔位文字已在 HTML 改過了 */
+  .target-category-indicator {
+    display: none;
+  }
+
   .add-link-form input {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
   }
 
   .add-btn {
     padding: 0 0.85rem;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
   }
 
-  /* 批次按鈕：手機只顯示 icon */
-  .batch-label-desktop {
-    display: none;
-  }
-
-  .batch-icon-mobile {
-    display: block;
-  }
-
-  .batch-mode-btn {
-    padding: 0.65rem 0.75rem;
-    min-width: 42px;
-  }
-
-  /* 卡片格線：手機單欄 */
   .links-grid {
     grid-template-columns: 1fr;
     gap: 0.85rem;
-  }
-
-  /* 批次工具列：手機分區塊式設計 */
-  .batch-action-bar {
-    /* 重置為基本排版，手機重建 */
-    flex-direction: column;
-    border-radius: 20px;
-    bottom: 1rem;
-    left: 1rem;
-    right: 1rem;
-    width: auto;
-    /* 不要用 % width + translateX，改用 left/right 區大小 */
-    transform: none;
-    /* 覆寫掉桌面版的 translateX(-50%) */
-    max-width: none;
-    padding: 1rem;
-    gap: 0.85rem;
-    animation: slideUp-mobile 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-
-  @keyframes slideUp-mobile {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  /* 已選筆數：區塊占滿寬 */
-  .batch-info {
-    width: 100%;
-    text-align: center;
-    font-size: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  /* 標籤選擇 + 確認按鈕：占滿寬並排 */
-  .batch-controls {
-    width: 100%;
-    flex-wrap: nowrap;
-    gap: 0.6rem;
-  }
-
-  /* 下拉選單充滿剰餘空間 */
-  .batch-select {
-    flex: 1;
-    min-width: 0;
-    font-size: 0.92rem;
-    padding: 0.55rem 0.6rem;
-    height: 44px;
-    /* 手機觸控最小高度 */
-  }
-
-  /* 確認按鈕固定寬度，不被沪縮 */
-  .confirm-batch-btn {
-    flex-shrink: 0;
-    padding: 0 1rem;
-    height: 44px;
-    font-size: 0.92rem;
   }
 
   .section-title {
@@ -1454,76 +1932,8 @@ const selectCollection = (col) => {
   .floating-batch-btn {
     right: 16px;
     bottom: 20px;
-    width: 52px;
-    height: 52px;
-  }
-}
-
-/* ============================================
-   Toast 通知
-   ============================================ */
-.toast-container {
-  position: fixed;
-  bottom: 1.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  z-index: 9999;
-  pointer-events: none;
-}
-
-.toast {
-  background: rgba(30, 30, 50, 0.92);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #fff;
-  padding: 0.7rem 1.2rem;
-  border-radius: 40px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  white-space: nowrap;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-  letter-spacing: 0.01em;
-}
-
-.toast.error {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(80, 20, 20, 0.92);
-}
-
-/* toast 動畫 */
-.toast-anim-enter-active {
-  animation: toast-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.toast-anim-leave-active {
-  animation: toast-out 0.25s ease forwards;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.9);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes toast-out {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    transform: translateY(8px) scale(0.95);
+    width: 50px;
+    height: 50px;
   }
 }
 </style>

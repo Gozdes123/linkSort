@@ -10,6 +10,18 @@ let authSubscription = null
 let signedOutAt = 0  // 記錄最後一次登出的時間點
 
 onMounted(async () => {
+  // 檢查是否處於本機開發預覽模式
+  const isDevPreview = sessionStorage.getItem('linksort_dev_preview') === 'true'
+  if (isDevPreview) {
+    user.value = {
+      id: 'dev-user',
+      email: 'dev@linksort.local',
+      user_metadata: { display_name: '本機開發者' }
+    }
+    isLoading.value = false
+    return
+  }
+
   try {
     const { data: { session }, error } = await supabase.auth.getSession()
     if (error) {
@@ -25,6 +37,10 @@ onMounted(async () => {
   }
 
   const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    if (sessionStorage.getItem('linksort_dev_preview') === 'true') {
+      return
+    }
+
     console.log('[Auth] event:', event, '| user:', session?.user?.id ?? 'null')
 
     if (event === 'SIGNED_OUT') {

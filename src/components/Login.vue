@@ -6,15 +6,10 @@ const LIFF_ID = import.meta.env.VITE_LIFF_ID
 const EDGE_FUNCTION_URL = import.meta.env.VITE_SUPABASE_EDGE_FUNCTION_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-/**
- * phase 說明:
- *  'idle'       → 顯示「使用 LINE 登入」按鈕
- *  'completing' → 正在向後端驗證（轉圈狀態）
- *  'error'      → 發生錯誤
- */
 const phase = ref('idle')
 const errorMsg = ref('')
 const statusMsg = ref('驗證身份中，請稍候…')
+const isLocalHost = ref(false)
 
 // 用來避免 liff.init() 重複呼叫的 Promise 快取
 let liffReadyPromise = null
@@ -70,8 +65,6 @@ const completeAuth = async (liff) => {
       throw new Error('登入驗證失敗：' + authError.message)
     }
 
-    // 成功！App.vue 的 onAuthStateChange 會切換到 Dashboard
-
   } catch (e) {
     console.error('[LIFF Login Error]', e)
     phase.value = 'error'
@@ -79,36 +72,26 @@ const completeAuth = async (liff) => {
   }
 }
 
-/** onMounted 時執行：判斷是「剛登出」還是「從 LINE 回來」*/
+/** onMounted 時執行 */
 const initAndCheck = async () => {
-  // ⚠️ 第一步：同步讀取旗標，這是最高優先順序的判斷
-  // 必須在所有 async 操作之前，確保「登出後顯示按鈕」的邏輯不被任何 LIFF 操作覆蓋
-  const justLoggedOut = sessionStorage.getItem('liff_just_logged_out') === 'true'
+  isLocalHost.value = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 
+  const justLoggedOut = sessionStorage.getItem('liff_just_logged_out') === 'true'
   if (justLoggedOut) {
-    // 清除旗標，顯示登入按鈕，完全不觸碰 LIFF
-    // LIFF token 讓它自然留在 localStorage，不主動 logout
-    // （反正按鈕點下去時會重新 init，isLoggedIn() = true 的話直接完成 auth 也 ok）
     sessionStorage.removeItem('liff_just_logged_out')
-    // phase 維持 'idle' → 顯示登入按鈕，等使用者手動點
     return
   }
 
-  // 沒有登出旗標，才進行 LIFF 初始化與自動登入判斷
   try {
     const liff = await getLiff()
     console.log('[LIFF] isLoggedIn:', liff.isLoggedIn())
 
     if (liff.isLoggedIn()) {
-      // LIFF 已登入 = 使用者從 LINE OAuth 跳回來了，自動完成 Supabase 認證
       await completeAuth(liff)
     }
-    // 若 LIFF 不是登入狀態，phase 維持 'idle' → 顯示登入按鈕
   } catch (e) {
     console.error('[LIFF] 初始化失敗:', e)
     liffReadyPromise = null
-    // 初始化失敗不顯示錯誤，讓使用者自己點按鈕重試
-    // phase 維持 'idle'
   }
 }
 
@@ -118,17 +101,47 @@ const startLineLogin = async () => {
     const liff = await getLiff()
 
     if (liff.isLoggedIn()) {
-      // 若 LIFF 恰好已登入（LIFF token 還在），直接完成
       await completeAuth(liff)
     } else {
-      // 跳轉到 LINE OAuth，授權後會帶著 code 回來，initAndCheck 會自動完成
-      liff.login()
+      // 嘗試傳入目前的網址作為 redirectUri，避免被強制導回預設正式站
+      liff.login({ redirectUri: window.location.href })
     }
   } catch (e) {
     console.error('[LIFF] startLineLogin 錯誤:', e)
     liffReadyPromise = null
     phase.value = 'error'
     errorMsg.value = e.message || '無法啟動 LINE 登入，請重試'
+  }
+}
+
+/** 本機開發專用：免登入直接進入預覽模式體驗 UI/UX */
+const enterDevPreview = () => {
+  sessionStorage.setItem('linksort_dev_preview', 'true')
+  window.location.reload()
+}
+
+/** 本機開發專用：貼上正式站已登入的 Token 直接登入真實帳號 */
+const importSessionToken = async () => {
+  const tokenInput = prompt(
+    '【同步正式站真實資料】\n請在正式站（已登入狀態）按 F12 開啟 Console 輸入：\ncopy(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith("sb-")&&k.endsWith("-auth-token"))))\n\n並將複製的內容貼在下方：'
+  )
+  if (!tokenInput || !tokenInput.trim()) return
+
+  try {
+    const session = JSON.parse(tokenInput.trim())
+    if (session.access_token && session.refresh_token) {
+      const { error } = await supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      })
+      if (error) throw error
+      alert('✅ 成功同步正式站登入狀態！即將載入本機儀表板。')
+      window.location.reload()
+    } else {
+      alert('❌ Token 格式不正確，缺少 access_token 或 refresh_token')
+    }
+  } catch (err) {
+    alert('❌ 設定 Session 失敗：' + err.message)
   }
 }
 
@@ -158,6 +171,24 @@ onMounted(initAndCheck)
           </span>
           使用 LINE 登入
         </button>
+
+        <!-- 本機開發專用快速通道（只在 localhost 顯示） -->
+        <div v-if="isLocalHost" class="dev-login-panel">
+          <div class="dev-divider">
+            <span>💻 本機開發模式通道</span>
+          </div>
+          <p class="dev-hint">
+            LINE 登入跳轉至正式站？您可使用下列方式直接在本機預覽或同步正式資料：
+          </p>
+          <div class="dev-buttons">
+            <button class="dev-btn preview-btn" @click="enterDevPreview">
+              🚀 免登入直接體驗 (含測試資料)
+            </button>
+            <button class="dev-btn sync-btn" @click="importSessionToken">
+              📋 貼上正式站 Token 登入真實帳號
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- ② 驗證中 -->
@@ -179,6 +210,14 @@ onMounted(initAndCheck)
           </span>
           重新使用 LINE 登入
         </button>
+
+        <div v-if="isLocalHost" class="dev-login-panel">
+          <div class="dev-buttons">
+            <button class="dev-btn preview-btn" @click="enterDevPreview">
+              🚀 免登入直接體驗 (含測試資料)
+            </button>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -198,13 +237,13 @@ onMounted(initAndCheck)
 
 .login-card {
   width: 100%;
-  max-width: 380px;
+  max-width: 400px;
   padding: 2.5rem 2rem;
   border-radius: 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rem;
+  gap: 1.75rem;
 }
 
 /* ── Brand ── */
@@ -347,5 +386,79 @@ onMounted(initAndCheck)
 .line-icon {
   display: inline-flex;
   align-items: center;
+}
+
+/* ── 本機開發模式面板 ── */
+.dev-login-panel {
+  width: 100%;
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.15);
+  padding-top: 1rem;
+}
+
+.dev-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--accent-color);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.dev-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  text-align: center;
+  margin: 0;
+  opacity: 0.85;
+}
+
+.dev-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dev-btn {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.preview-btn {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #fff;
+}
+
+.preview-btn:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(168, 85, 247, 0.35));
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
+}
+
+.sync-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  color: var(--text-secondary);
+}
+
+.sync-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
 }
 </style>

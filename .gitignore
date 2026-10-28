@@ -25,3 +25,8 @@ dist-ssr
 
 # Supabase functions and config
 supabase/
+
+# Environment files
+.env
+.env.*
+!.env.example
